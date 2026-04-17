@@ -1,0 +1,140 @@
+# ══════════════════════════════════════════════════════════════
+# ODIN API — Test Requests (use with REST Client extension or similar)
+# ══════════════════════════════════════════════════════════════
+
+@baseUrl = http://localhost:5000/api
+
+### ── 1. Register a new student ──
+POST {{baseUrl}}/player/register
+Content-Type: application/json
+
+{
+  "studentId": "2025-CS-001",
+  "displayName": "Juan Dela Cruz",
+  "password": "YOUR_PASSWORD"
+}
+
+### ── 2. Login ──
+POST {{baseUrl}}/player/login
+Content-Type: application/json
+
+{
+  "studentId": "2025-CS-001",
+  "password": "YOUR_PASSWORD"
+}
+
+### ── 3. Create a game session ──
+# Replace {playerId} with the ID returned from registration
+POST {{baseUrl}}/session
+Content-Type: application/json
+
+{
+  "playerId": "REPLACE_WITH_PLAYER_GUID",
+  "dungeonLevel": 1,
+  "puzzleId": "array-init-01"
+}
+
+### ── 4. Submit code (the main pipeline endpoint) ──
+# This triggers the full Sequential Processing Pipeline:
+# HBDA → AST Diagnosis → BKT → Affective Evaluation → Intervention
+POST {{baseUrl}}/submission
+Content-Type: application/json
+
+{
+  "playerId": "REPLACE_WITH_PLAYER_GUID",
+  "sessionId": "REPLACE_WITH_SESSION_GUID",
+  "puzzleId": "array-init-01",
+  "skillType": "ArrayInitialization",
+  "sourceCode": "int[] numbers = new int[5];\nnumbers[0] = 10;\nnumbers[1] = 20;\nConsole.WriteLine(numbers[0]);",
+  "keystrokeData": {
+    "averageFlightTimeMs": 150.5,
+    "averageDwellTimeMs": 80.2,
+    "initialLatencyMs": 5000,
+    "totalTimeSeconds": 45.0
+  },
+  "hintUsageCount": 0
+}
+
+### ── 5. Submit code with Off-by-One error (triggers HBDA + AST detection) ──
+POST {{baseUrl}}/submission
+Content-Type: application/json
+
+{
+  "playerId": "REPLACE_WITH_PLAYER_GUID",
+  "sessionId": "REPLACE_WITH_SESSION_GUID",
+  "puzzleId": "array-iter-01",
+  "skillType": "ArrayIteration",
+  "sourceCode": "int[] arr = {1, 2, 3, 4, 5};\nfor (int i = 0; i <= arr.Length; i++)\n{\n    Console.WriteLine(arr[i]);\n}",
+  "keystrokeData": {
+    "averageFlightTimeMs": 200.0,
+    "averageDwellTimeMs": 90.0,
+    "initialLatencyMs": 3000,
+    "totalTimeSeconds": 20.0
+  },
+  "hintUsageCount": 0
+}
+
+### ── 6. Submit rapid empty code (triggers Gaming the System) ──
+POST {{baseUrl}}/submission
+Content-Type: application/json
+
+{
+  "playerId": "REPLACE_WITH_PLAYER_GUID",
+  "sessionId": "REPLACE_WITH_SESSION_GUID",
+  "puzzleId": "array-init-01",
+  "skillType": "ArrayInitialization",
+  "sourceCode": "",
+  "keystrokeData": {
+    "averageFlightTimeMs": 50.0,
+    "averageDwellTimeMs": 30.0,
+    "initialLatencyMs": 200,
+    "totalTimeSeconds": 1.5
+  },
+  "hintUsageCount": 4
+}
+
+### ── 7. Submit with Active Thinking pattern (long pause + burst typing) ──
+POST {{baseUrl}}/submission
+Content-Type: application/json
+
+{
+  "playerId": "REPLACE_WITH_PLAYER_GUID",
+  "sessionId": "REPLACE_WITH_SESSION_GUID",
+  "puzzleId": "array-init-01",
+  "skillType": "ArrayInitialization",
+  "sourceCode": "int[] numbers = new int[5] {10, 20, 30, 40, 50};\nint sum = 0;\nfor (int i = 0; i < numbers.Length; i++)\n{\n    sum += numbers[i];\n}\nConsole.WriteLine(sum);",
+  "keystrokeData": {
+    "averageFlightTimeMs": 120.0,
+    "averageDwellTimeMs": 70.0,
+    "initialLatencyMs": 35000,
+    "totalTimeSeconds": 60.0
+  },
+  "hintUsageCount": 0
+}
+
+### ── 8. Get player profile + mastery states ──
+GET {{baseUrl}}/player/REPLACE_WITH_PLAYER_GUID
+
+### ── 9. Get player interaction history ──
+GET {{baseUrl}}/player/REPLACE_WITH_PLAYER_GUID/history?limit=20
+
+### ── 10. Instructor Dashboard: Class Overview ──
+GET {{baseUrl}}/instructor/overview
+
+### ── 11. Instructor Dashboard: Cognitive Bottlenecks ──
+GET {{baseUrl}}/instructor/bottlenecks
+
+### ── 12. Instructor Dashboard: Student List (sorted by risk) ──
+GET {{baseUrl}}/instructor/students
+
+### ── 13. Instructor Dashboard: Recent Interventions ──
+GET {{baseUrl}}/instructor/interventions?limit=20
+
+### ── 14. Instructor Dashboard: Mastery Heatmap Data ──
+GET {{baseUrl}}/instructor/mastery-heatmap
+
+### ── 15. Get puzzles for Level 1 (Array Initialization) ──
+GET {{baseUrl}}/puzzle/level/1
+
+### ── 16. End a session ──
+PATCH {{baseUrl}}/session/REPLACE_WITH_SESSION_GUID/end
