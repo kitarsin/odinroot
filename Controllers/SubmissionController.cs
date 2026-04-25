@@ -122,6 +122,8 @@ public class SubmissionController : ControllerBase
         session.SubmissionCount++;
         if (diagnosticResult.IsCorrect) session.IsCompleted = true;
 
+        await _db.SaveChangesAsync();
+
         var interactionLog = new InteractionLog
         {
             UserId = request.PlayerId,

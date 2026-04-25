@@ -87,6 +87,7 @@ public class OdinDbContext : DbContext
             e.Property(s => s.InterventionType).HasColumnName("intervention_type");
             e.HasIndex(s => s.UserId);
             e.HasIndex(s => s.SessionId);
+            e.HasOne<GameSession>().WithMany(g => g.Submissions).HasForeignKey(s => s.SessionId);
         });
 
         // ── game_sessions → GameSession ──

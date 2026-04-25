@@ -14,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<OdinDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("SupabaseDb"),
-        npgsql => npgsql.EnableRetryOnFailure(3)));
+        npgsql => { }));
 
 // ═══════════════════════════════════════════════════════════
 // Authentication — Validate Supabase JWT tokens
