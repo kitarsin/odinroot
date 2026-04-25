@@ -106,11 +106,9 @@ builder.Services.AddCors(options =>
     options.AddPolicy("GameClient", policy =>
     {
         policy.WithOrigins(
-                builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-                ?? new[] { "http://localhost:3000", "http://localhost:5173" })
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://insomnicode-odin.vercel.app");
     });
 });
 
