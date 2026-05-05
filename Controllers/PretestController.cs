@@ -121,18 +121,18 @@ public class PretestController : ControllerBase
              .Where(l => l.Length > 0));
 
     /// Wrap student code in a minimal runnable scaffold.
-    private static string WrapForExecution(string code) => $"""
+    private static string WrapForExecution(string code) => $$"""
         using System;
         using System.Linq;
         using System.Collections.Generic;
 
         class __Runner
-        {{
+        {
             static void Main(string[] args)
-            {{
-                {code}
-            }}
-        }}
+            {
+                {{code}}
+            }
+        }
         """;
 
     /// Compile and execute student code; return stdout or null on failure/timeout.
