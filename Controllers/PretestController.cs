@@ -30,7 +30,7 @@ public class PretestController : ControllerBase
         var trusted = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string ?? "";
         return trusted
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-            .Where(File.Exists)
+            .Where(System.IO.File.Exists)
             .Select(p => (MetadataReference)MetadataReference.CreateFromFile(p))
             .ToList();
     });
