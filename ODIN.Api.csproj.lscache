@@ -56,6 +56,7 @@ TemporaryDependencyNodeTargetIdentifier=net8.0
 Controllers/
  InstructorController.cs
  PlayerController.cs
+ PretestController.cs
  PuzzleController.cs
  SessionController.cs
  SubmissionController.cs
