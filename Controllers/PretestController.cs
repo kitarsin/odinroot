@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -14,7 +15,7 @@ public class PretestController : ControllerBase
 {
     private readonly IDiagnosticEngine _diagnosticEngine;
 
-    // Normalized expected outputs per problem (each line trimmed, joined with \n)
+    // Expected primary output per problem
     private static readonly Dictionary<string, string> ExpectedOutputs = new()
     {
         ["p1"] = "78",
@@ -22,6 +23,23 @@ public class PretestController : ControllerBase
         ["p3"] = "25",
         ["p4"] = "2\n4\n6\n8\n10",
         ["p5"] = "3",
+    };
+
+    // Secondary tests: replace the known array literal with different values and re-run.
+    // A hardcoded Console.WriteLine will produce the wrong output for the new array.
+    private static readonly Dictionary<string, (string ArrayRegex, string NewArray, string Expected)> SecondaryTests = new()
+    {
+        ["p1"] = (@"\{\s*85\s*,\s*92\s*,\s*78\s*,\s*95\s*,\s*88\s*\}", "{ 10, 20, 30, 40, 50 }", "30"),
+        ["p3"] = (@"\{\s*3\s*,\s*7\s*,\s*2\s*,\s*9\s*,\s*4\s*\}",      "{ 1, 2, 3, 4, 5 }",        "15"),
+        ["p4"] = (@"\{\s*1\s*,\s*2\s*,\s*3\s*,\s*4\s*,\s*5\s*\}",      "{ 3, 6, 9 }",              "6\n12\n18"),
+        ["p5"] = (@"\{\s*4\s*,\s*7\s*,\s*2\s*,\s*9\s*,\s*1\s*,\s*8\s*,\s*3\s*\}", "{ 1, 2, 3, 4, 5 }", "0"),
+    };
+
+    // p2 can't use array-swap (hardcoded index would break with a shorter array),
+    // so require that the code actually contains an array access expression.
+    private static readonly Dictionary<string, string> RequiredPatterns = new()
+    {
+        ["p2"] = @"arr\[",
     };
 
     // Cached metadata references — built once from TRUSTED_PLATFORM_ASSEMBLIES
@@ -52,15 +70,13 @@ public class PretestController : ControllerBase
         if (!Enum.TryParse<SkillType>(request.SkillType, out var skillType))
             skillType = SkillType.ArrayInitialization;
 
-        // Stage 1 — static analysis (syntax errors, array-specific bugs)
+        // Stage 1 — static analysis
         var diagnostic = _diagnosticEngine.Diagnose(request.SourceCode, skillType);
 
         string? actualOutput = null;
 
-        // Stage 2 — execute and compare output (only when no compiler errors)
         if (!diagnostic.CompilerDiagnostics.Any())
         {
-            // Unknown problem ID → always fail so students can't game missing entries
             if (!ExpectedOutputs.TryGetValue(request.ProblemId ?? "", out var expected))
             {
                 diagnostic.IsCorrect = false;
@@ -69,6 +85,7 @@ public class PretestController : ControllerBase
             }
             else
             {
+                // Stage 2 — execute and compare primary output
                 actualOutput = await ExecuteCodeAsync(request.SourceCode);
 
                 if (actualOutput == null)
@@ -77,18 +94,38 @@ public class PretestController : ControllerBase
                     diagnostic.Category  = DiagnosticCategory.GenericLogicError;
                     diagnostic.Message   = "Your code could not be executed. Check for infinite loops or unsupported operations.";
                 }
+                else if (Normalize(actualOutput) != Normalize(expected))
+                {
+                    diagnostic.IsCorrect = false;
+                    diagnostic.Category  = DiagnosticCategory.GenericLogicError;
+                    diagnostic.Message   = string.IsNullOrWhiteSpace(actualOutput)
+                        ? "Your code produced no output. Make sure you have a Console.WriteLine with the correct value."
+                        : "Your output does not match the expected result. Review your logic.";
+                }
                 else
                 {
-                    var normalActual   = Normalize(actualOutput);
-                    var normalExpected = Normalize(expected);
-
-                    if (normalActual != normalExpected)
+                    // Stage 3 — anti-hardcode: required pattern check
+                    if (RequiredPatterns.TryGetValue(request.ProblemId!, out var pattern)
+                        && !Regex.IsMatch(request.SourceCode, pattern))
                     {
                         diagnostic.IsCorrect = false;
                         diagnostic.Category  = DiagnosticCategory.GenericLogicError;
-                        diagnostic.Message   = string.IsNullOrWhiteSpace(actualOutput)
-                            ? "Your code produced no output. Make sure you have a Console.WriteLine with the correct value."
-                            : "Your output does not match the expected result. Review your logic.";
+                        diagnostic.Message   = "Make sure your solution uses the array — not just a hardcoded value.";
+                    }
+                    // Stage 3 — anti-hardcode: secondary execution with swapped array values
+                    else if (SecondaryTests.TryGetValue(request.ProblemId!, out var sec))
+                    {
+                        var altCode = Regex.Replace(request.SourceCode, sec.ArrayRegex, sec.NewArray);
+                        if (altCode != request.SourceCode) // substitution succeeded
+                        {
+                            var altOutput = await ExecuteCodeAsync(altCode);
+                            if (altOutput == null || Normalize(altOutput) != Normalize(sec.Expected))
+                            {
+                                diagnostic.IsCorrect = false;
+                                diagnostic.Category  = DiagnosticCategory.GenericLogicError;
+                                diagnostic.Message   = "Your solution appears to use a hardcoded value. Make sure your code actually processes the array — it should work for any valid input.";
+                            }
+                        }
                     }
                 }
             }
@@ -113,14 +150,12 @@ public class PretestController : ControllerBase
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    /// Trim each non-blank line, join with \n — makes comparison whitespace-tolerant.
     private static string Normalize(string s) =>
         string.Join('\n',
             s.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
              .Select(l => l.Trim())
              .Where(l => l.Length > 0));
 
-    /// Wrap student code in a minimal runnable scaffold.
     private static string WrapForExecution(string code) => $$"""
         using System;
         using System.Linq;
@@ -135,7 +170,6 @@ public class PretestController : ControllerBase
         }
         """;
 
-    /// Compile and execute student code; return stdout or null on failure/timeout.
     private static async Task<string?> ExecuteCodeAsync(string sourceCode)
     {
         try
