@@ -87,7 +87,7 @@ public class PretestController : ControllerBase
                 {
                     diagnostic.IsCorrect = false;
                     diagnostic.Category  = DiagnosticCategory.GenericLogicError;
-                    diagnostic.Message   = "Your code could not be executed. Check for infinite loops or unsupported operations.";
+                    diagnostic.Message   = "Your code could not be executed. Check for infinite loops, excessive output, or unsupported operations.";
                 }
                 else if (Normalize(actualOutput) != Normalize(expected))
                 {
@@ -200,8 +200,7 @@ public class PretestController : ControllerBase
                 ? null
                 : new object[] { Array.Empty<string>() };
 
-            var sb     = new StringBuilder();
-            var writer = new StringWriter(sb);
+            var writer = new LimitedStringWriter();
 
             lock (ConsoleLock)
             {
@@ -211,12 +210,39 @@ public class PretestController : ControllerBase
                 finally { Console.SetOut(saved); }
             }
 
-            return sb.ToString().Trim();
+            return writer.Result.Trim();
         }
         catch
         {
             return null;
         }
+    }
+
+    // Caps output at 4 KB. Any correct pretest solution outputs at most a few lines.
+    // Exceeding the limit throws, which causes RunCode to return null → execution failure.
+    private sealed class LimitedStringWriter : TextWriter
+    {
+        private readonly StringBuilder _sb = new();
+        private int _total;
+        private const int Limit = 4_096;
+
+        public override Encoding Encoding => Encoding.UTF8;
+        public string Result => _sb.ToString();
+
+        private void Guard(int n)
+        {
+            if (_total + n > Limit)
+                throw new InvalidOperationException("Output size limit exceeded.");
+        }
+
+        public override void Write(char value)
+            { Guard(1); _sb.Append(value); _total++; }
+
+        public override void Write(string? value)
+            { if (value is null) return; Guard(value.Length); _sb.Append(value); _total += value.Length; }
+
+        public override void Write(char[] buffer, int index, int count)
+            { Guard(count); _sb.Append(buffer, index, count); _total += count; }
     }
 }
 
