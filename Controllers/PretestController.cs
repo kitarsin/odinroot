@@ -26,20 +26,15 @@ public class PretestController : ControllerBase
     };
 
     // Secondary tests: replace the known array literal with different values and re-run.
-    // A hardcoded Console.WriteLine will produce the wrong output for the new array.
+    // If the student's code no longer contains the expected array (deleted it), that also fails.
+    // p2 uses a same-length replacement so arr[4] still works; it only catches Console.WriteLine(50) bypasses.
     private static readonly Dictionary<string, (string ArrayRegex, string NewArray, string Expected)> SecondaryTests = new()
     {
-        ["p1"] = (@"\{\s*85\s*,\s*92\s*,\s*78\s*,\s*95\s*,\s*88\s*\}", "{ 10, 20, 30, 40, 50 }", "30"),
-        ["p3"] = (@"\{\s*3\s*,\s*7\s*,\s*2\s*,\s*9\s*,\s*4\s*\}",      "{ 1, 2, 3, 4, 5 }",        "15"),
-        ["p4"] = (@"\{\s*1\s*,\s*2\s*,\s*3\s*,\s*4\s*,\s*5\s*\}",      "{ 3, 6, 9 }",              "6\n12\n18"),
-        ["p5"] = (@"\{\s*4\s*,\s*7\s*,\s*2\s*,\s*9\s*,\s*1\s*,\s*8\s*,\s*3\s*\}", "{ 1, 2, 3, 4, 5 }", "0"),
-    };
-
-    // p2 can't use array-swap (hardcoded index would break with a shorter array),
-    // so require that the code actually contains an array access expression.
-    private static readonly Dictionary<string, string> RequiredPatterns = new()
-    {
-        ["p2"] = @"arr\[",
+        ["p1"] = (@"\{\s*85\s*,\s*92\s*,\s*78\s*,\s*95\s*,\s*88\s*\}",             "{ 10, 20, 30, 40, 50 }",    "30"),
+        ["p2"] = (@"\{\s*10\s*,\s*20\s*,\s*30\s*,\s*40\s*,\s*50\s*\}",             "{ 100, 200, 300, 400, 500 }", "500"),
+        ["p3"] = (@"\{\s*3\s*,\s*7\s*,\s*2\s*,\s*9\s*,\s*4\s*\}",                  "{ 1, 2, 3, 4, 5 }",          "15"),
+        ["p4"] = (@"\{\s*1\s*,\s*2\s*,\s*3\s*,\s*4\s*,\s*5\s*\}",                  "{ 3, 6, 9 }",                "6\n12\n18"),
+        ["p5"] = (@"\{\s*4\s*,\s*7\s*,\s*2\s*,\s*9\s*,\s*1\s*,\s*8\s*,\s*3\s*\}", "{ 1, 2, 3, 4, 5 }",         "0"),
     };
 
     // Cached metadata references — built once from TRUSTED_PLATFORM_ASSEMBLIES
@@ -102,29 +97,26 @@ public class PretestController : ControllerBase
                         ? "Your code produced no output. Make sure you have a Console.WriteLine with the correct value."
                         : "Your output does not match the expected result. Review your logic.";
                 }
-                else
+                else if (SecondaryTests.TryGetValue(request.ProblemId!, out var sec))
                 {
-                    // Stage 3 — anti-hardcode: required pattern check
-                    if (RequiredPatterns.TryGetValue(request.ProblemId!, out var pattern)
-                        && !Regex.IsMatch(request.SourceCode, pattern))
+                    // Stage 3 — anti-hardcode: swap the array literal and re-run.
+                    // If the array literal is gone (student deleted it), that also fails —
+                    // correct solutions must keep the required array in the code.
+                    var altCode = Regex.Replace(request.SourceCode, sec.ArrayRegex, sec.NewArray);
+                    if (altCode == request.SourceCode)
                     {
                         diagnostic.IsCorrect = false;
                         diagnostic.Category  = DiagnosticCategory.GenericLogicError;
-                        diagnostic.Message   = "Make sure your solution uses the array — not just a hardcoded value.";
+                        diagnostic.Message   = "Make sure your code uses the provided array — do not remove the array declaration.";
                     }
-                    // Stage 3 — anti-hardcode: secondary execution with swapped array values
-                    else if (SecondaryTests.TryGetValue(request.ProblemId!, out var sec))
+                    else
                     {
-                        var altCode = Regex.Replace(request.SourceCode, sec.ArrayRegex, sec.NewArray);
-                        if (altCode != request.SourceCode) // substitution succeeded
+                        var altOutput = await ExecuteCodeAsync(altCode);
+                        if (altOutput == null || Normalize(altOutput) != Normalize(sec.Expected))
                         {
-                            var altOutput = await ExecuteCodeAsync(altCode);
-                            if (altOutput == null || Normalize(altOutput) != Normalize(sec.Expected))
-                            {
-                                diagnostic.IsCorrect = false;
-                                diagnostic.Category  = DiagnosticCategory.GenericLogicError;
-                                diagnostic.Message   = "Your solution appears to use a hardcoded value. Make sure your code actually processes the array — it should work for any valid input.";
-                            }
+                            diagnostic.IsCorrect = false;
+                            diagnostic.Category  = DiagnosticCategory.GenericLogicError;
+                            diagnostic.Message   = "Your solution appears to use a hardcoded value. Make sure your code actually processes the array — it should work for any valid input.";
                         }
                     }
                 }
