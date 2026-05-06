@@ -10,7 +10,7 @@ The Pedagogical Kernel that powers ODIN's "Stealth Assessment" — a Sequential 
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                    GAME CLIENT (React/Unity)                  │
+│                    GAME CLIENT (React/Godot)                  │
 │         Keystroke Dynamics Monitor + Code Editor              │
 └─────────────────────────┬────────────────────────────────────┘
                           │ HTTPS POST /api/submission
