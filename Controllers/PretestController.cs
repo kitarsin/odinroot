@@ -19,10 +19,10 @@ public class PretestController : ControllerBase
     private static readonly Dictionary<string, string> ExpectedOutputs = new()
     {
         ["p1"] = "78",
-        ["p2"] = "50",
-        ["p3"] = "25",
-        ["p4"] = "2\n4\n6\n8\n10",
-        ["p5"] = "3",
+        ["p2"] = "20",
+        ["p3"] = "50\n10",
+        ["p4"] = "18",
+        ["p5"] = "4",
     };
 
     // Secondary tests: replace the known array literal with different values and re-run.
@@ -30,11 +30,11 @@ public class PretestController : ControllerBase
     // p2 uses a same-length replacement so arr[4] still works; it only catches Console.WriteLine(50) bypasses.
     private static readonly Dictionary<string, (string ArrayRegex, string NewArray, string Expected)> SecondaryTests = new()
     {
-        ["p1"] = (@"\{\s*85\s*,\s*92\s*,\s*78\s*,\s*95\s*,\s*88\s*\}",             "{ 10, 20, 30, 40, 50 }",    "30"),
-        ["p2"] = (@"\{\s*10\s*,\s*20\s*,\s*30\s*,\s*40\s*,\s*50\s*\}",             "{ 100, 200, 300, 400, 500 }", "500"),
-        ["p3"] = (@"\{\s*3\s*,\s*7\s*,\s*2\s*,\s*9\s*,\s*4\s*\}",                  "{ 1, 2, 3, 4, 5 }",          "15"),
-        ["p4"] = (@"\{\s*1\s*,\s*2\s*,\s*3\s*,\s*4\s*,\s*5\s*\}",                  "{ 3, 6, 9 }",                "6\n12\n18"),
-        ["p5"] = (@"\{\s*4\s*,\s*7\s*,\s*2\s*,\s*9\s*,\s*1\s*,\s*8\s*,\s*3\s*\}", "{ 1, 2, 3, 4, 5 }",         "0"),
+        ["p1"] = (@"\{\s*85\s*,\s*92\s*,\s*78\s*,\s*95\s*,\s*88\s*\}",                                         "{ 10, 20, 30, 40, 50 }",    "30"),
+        ["p2"] = (@"\{\s*3\s*,\s*8\s*,\s*2\s*,\s*9\s*,\s*4\s*,\s*7\s*,\s*6\s*\}",                              "{ 1, 2, 3, 4, 5 }",         "6"),
+        ["p3"] = (@"\{\s*10\s*,\s*20\s*,\s*30\s*,\s*40\s*,\s*50\s*\}",                                         "{ 99, 88, 77 }",            "77\n99"),
+        ["p4"] = (@"\{\s*14\s*,\s*3\s*,\s*27\s*,\s*9\s*,\s*27\s*,\s*18\s*,\s*5\s*\}",                         "{ 10, 5, 20, 20, 15 }",     "15"),
+        ["p5"] = (@"\{\s*3\s*,\s*1\s*,\s*4\s*,\s*5\s*,\s*9\s*,\s*2\s*,\s*6\s*,\s*5\s*,\s*3\s*,\s*7\s*,\s*8\s*\}", "{ 10, 20, 30, 5, 6 }",      "3"),
     };
 
     // Cached metadata references — built once from TRUSTED_PLATFORM_ASSEMBLIES
@@ -144,7 +144,7 @@ public class PretestController : ControllerBase
 
     private static string Normalize(string s) =>
         string.Join('\n',
-            s.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            s.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
              .Select(l => l.Trim())
              .Where(l => l.Length > 0));
 
