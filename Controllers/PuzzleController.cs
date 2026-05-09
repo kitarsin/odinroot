@@ -14,7 +14,7 @@ public class PuzzleController : ControllerBase
     [HttpGet("level/{level:int}")]
     public async Task<ActionResult> GetPuzzlesByLevel(int level)
     {
-        if (level < 1 || level > 3)
+        if (level < 0 || level > 3)
             return BadRequest(new { error = "Invalid level. Must be 1, 2, or 3." });
 
         var puzzles = await _db.Puzzles
