@@ -18,6 +18,7 @@ public class SubmissionController : ControllerBase
     private readonly OdinDbContext _db;
     private readonly IHbdaService _hbda;
     private readonly IDiagnosticEngine _diagnosticEngine;
+    private readonly ICodeExecutionService _codeExecution;
     private readonly IBktService _bkt;
     private readonly IAffectiveStateService _affectiveState;
     private readonly IInterventionController _interventionController;
@@ -25,11 +26,12 @@ public class SubmissionController : ControllerBase
 
     public SubmissionController(
         OdinDbContext db, IHbdaService hbda, IDiagnosticEngine diagnosticEngine,
-        IBktService bkt, IAffectiveStateService affectiveState,
+        ICodeExecutionService codeExecution, IBktService bkt,
+        IAffectiveStateService affectiveState,
         IInterventionController interventionController, ILogger<SubmissionController> logger)
     {
         _db = db; _hbda = hbda; _diagnosticEngine = diagnosticEngine;
-        _bkt = bkt; _affectiveState = affectiveState;
+        _codeExecution = codeExecution; _bkt = bkt; _affectiveState = affectiveState;
         _interventionController = interventionController; _logger = logger;
     }
 
@@ -45,20 +47,75 @@ public class SubmissionController : ControllerBase
         if (!Enum.TryParse<SkillType>(request.SkillType, true, out var skillTypeEnum))
             return BadRequest(new { error = "Invalid SkillType", value = request.SkillType });
 
-        // ── Fetch puzzle for starter code comparison ──
+        // ── Fetch puzzle for starter code check + execution validation ──
         Puzzle? puzzle = null;
         if (Guid.TryParse(request.PuzzleId, out var puzzleGuid))
             puzzle = await _db.Puzzles.FindAsync(puzzleGuid);
 
-        // ── Stage 2: AST Diagnosis ──
+        // ── Stage 1: AST Diagnosis ──
         var diagnosticResult = _diagnosticEngine.Diagnose(request.SourceCode, skillTypeEnum);
 
-        // ── Starter Code Guard: reject submissions identical to the starter template ──
+        // ── Starter Code Guard: block submissions identical to the starter template ──
+        // Normalization strips comments and whitespace so trivial edits don't bypass.
         if (puzzle != null && NormalizeCode(request.SourceCode) == NormalizeCode(puzzle.StarterCode))
         {
             diagnosticResult.IsCorrect = false;
-            diagnosticResult.Category = DiagnosticCategory.UnchangedStarterCode;
-            diagnosticResult.Message = "Your code matches the provided starter template. Write your own solution — submitting the starting code unchanged won't count.";
+            diagnosticResult.Category  = DiagnosticCategory.UnchangedStarterCode;
+            diagnosticResult.Message   = "Your code matches the provided starter template. Write your own solution — submitting the starting code unchanged won't count.";
+        }
+
+        // ── Stage 2: Execution-Based Output Validation ──
+        // Only runs when:
+        //   • Code wasn't flagged as unchanged starter (nothing to execute meaningfully)
+        //   • No Roslyn compile errors (broken code can't run)
+        //   • Puzzle has expected output recorded in the DB
+        if (diagnosticResult.Category != DiagnosticCategory.UnchangedStarterCode
+            && !diagnosticResult.CompilerDiagnostics.Any()
+            && puzzle?.ExpectedOutput is { Length: > 0 } expectedOut)
+        {
+            var actualOutput = await _codeExecution.ExecuteAsync(request.SourceCode);
+
+            if (actualOutput == null)
+            {
+                diagnosticResult.IsCorrect = false;
+                diagnosticResult.Category  = DiagnosticCategory.GenericLogicError;
+                diagnosticResult.Message   = "Your code could not be executed. Check for infinite loops, missing output, or unsupported operations.";
+            }
+            else if (_codeExecution.Normalize(actualOutput) != _codeExecution.Normalize(expectedOut))
+            {
+                diagnosticResult.IsCorrect = false;
+                diagnosticResult.Category  = DiagnosticCategory.GenericLogicError;
+                diagnosticResult.Message   = string.IsNullOrWhiteSpace(actualOutput)
+                    ? "Your code produced no output. Make sure you have a Console.WriteLine with the correct value."
+                    : "Your output does not match the expected result. Review your logic.";
+            }
+            else if (puzzle.TestCases is { Length: > 2 })
+            {
+                // Stage 3: Secondary anti-hardcoding tests.
+                // Each test substitutes different data into the student's code and re-runs.
+                // If the output stops matching after substitution, the student hardcoded the answer.
+                var testCases = JsonSerializer.Deserialize<List<SecondaryTestCase>>(puzzle.TestCases);
+                foreach (var tc in testCases ?? [])
+                {
+                    var altCode = Regex.Replace(request.SourceCode, tc.Find, tc.Replace);
+                    if (altCode == request.SourceCode)
+                    {
+                        // Pattern not found — student removed the required data
+                        diagnosticResult.IsCorrect = false;
+                        diagnosticResult.Category  = DiagnosticCategory.GenericLogicError;
+                        diagnosticResult.Message   = "Make sure your code uses the provided data — do not remove or hardcode the given values.";
+                        break;
+                    }
+                    var altOutput = await _codeExecution.ExecuteAsync(altCode);
+                    if (altOutput == null || _codeExecution.Normalize(altOutput) != _codeExecution.Normalize(tc.ExpectedOutput))
+                    {
+                        diagnosticResult.IsCorrect = false;
+                        diagnosticResult.Category  = DiagnosticCategory.GenericLogicError;
+                        diagnosticResult.Message   = "Your solution appears to hardcode the answer. Make sure it works correctly for any valid input.";
+                        break;
+                    }
+                }
+            }
         }
 
         // ── Retrieve previous submission for edit distance ──
@@ -96,7 +153,7 @@ public class SubmissionController : ControllerBase
             DiagnosticMessage = diagnosticResult.Message
         };
 
-        // ── Stage 1: HBDA Classification ──
+        // ── HBDA Classification ──
         var sessionHistory = await _db.CodeSubmissions
             .Where(s => s.SessionId == request.SessionId && s.UserId == request.PlayerId)
             .OrderBy(s => s.SubmittedAt)
@@ -105,7 +162,7 @@ public class SubmissionController : ControllerBase
         var hbdaResult = _hbda.Classify(submission, previousSubmission, sessionHistory);
         submission.BehaviorState = hbdaResult.State.ToString();
 
-        // ── Stage 3: BKT Update ──
+        // ── BKT Update ──
         var bktResult = await _bkt.UpdateMasteryAsync(
             request.PlayerId, request.SkillType, diagnosticResult.IsCorrect);
 
@@ -115,9 +172,8 @@ public class SubmissionController : ControllerBase
         player.TotalSubmissions++;
         player.UpdatedAt = DateTime.UtcNow;
 
-        // ── Intervention ──
-        int currentHintTier = sessionHistory
-            .Count(s => s.InterventionType == "ScaffoldingHint");
+        // ── Adaptive Intervention ──
+        int currentHintTier = sessionHistory.Count(s => s.InterventionType == "ScaffoldingHint");
 
         var interventionResult = await _interventionController.DetermineInterventionAsync(
             hbdaResult.State, diagnosticResult, bktResult, affectiveResult,
@@ -153,7 +209,6 @@ public class SubmissionController : ControllerBase
         };
         _db.InteractionLogs.Add(interactionLog);
 
-        // Persist raw keystroke events if the game client sent them
         if (request.KeystrokeData.RawEvents is { Count: > 0 } rawEvents)
         {
             _db.KeystrokeRawEventBatches.Add(new KeystrokeRawEventBatch
@@ -208,13 +263,12 @@ public class SubmissionController : ControllerBase
     private static int GetDungeonLevelForSkill(SkillType skill) => skill switch
     {
         SkillType.ArrayInitialization => 1, SkillType.ArrayAccess => 1,
-        SkillType.ArrayIteration => 2, SkillType.ArrayOperations => 2,
+        SkillType.ArrayIteration => 2,      SkillType.ArrayOperations => 2,
         SkillType.MultidimensionalArrays => 3, SkillType.JaggedArrays => 3,
         _ => 1
     };
 
-    // Strip comments and collapse whitespace so trivial edits (adding spaces / comments)
-    // don't bypass the starter-code identity check.
+    // Strip comments and collapse whitespace so trivial edits don't bypass the starter code guard.
     private static string NormalizeCode(string code)
     {
         code = Regex.Replace(code, @"//[^\r\n]*", "", RegexOptions.Multiline);

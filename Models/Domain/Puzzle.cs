@@ -12,4 +12,6 @@ public class Puzzle
     public string ExpectedOutput { get; set; } = "";
     public string? ArrayConcept { get; set; }
     public bool IsActive { get; set; } = true;
+    // JSONB: array of SecondaryTestCase for anti-hardcoding validation
+    public string? TestCases { get; set; }
 }

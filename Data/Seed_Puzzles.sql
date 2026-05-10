@@ -1,262 +1,255 @@
--- ODIN Puzzle Seed Data
--- Run once against the Supabase PostgreSQL database.
--- Pre-assigned UUIDs must be set on the matching enemy nodes in the Godot editor.
+-- ODIN Puzzle Seed Data — Pretest Style
+-- Run in Supabase SQL Editor.
+--
+-- Each puzzle provides data declarations as starter code.
+-- Students write the logic to produce specific console output.
+-- expected_output is the normalized Console output (no trailing newline).
+-- test_cases is a JSONB array of secondary anti-hardcoding substitution tests.
+--
+-- Regex patterns in test_cases use JSON \\ to represent a single backslash,
+-- so \\d+ in JSON becomes the regex \d+ (one or more digits).
 
-INSERT INTO puzzles (id, title, description, dungeon_level, order_index, skill_type, starter_code, expected_output, array_concept, is_active) VALUES
+-- Step 1: Add test_cases column if not already present
+ALTER TABLE puzzles ADD COLUMN IF NOT EXISTS test_cases JSONB;
+
+-- Step 2: Remove all existing puzzles
+DELETE FROM puzzles;
+
+-- Step 3: Insert all 21 new pretest-style puzzles
+INSERT INTO puzzles (id, title, description, dungeon_level, order_index, skill_type, starter_code, expected_output, array_concept, is_active, test_cases) VALUES
 
 -- ── Level 0: The Computer Laboratory (Diagnostic Protocol) ──────────────────
+
 ('a0000001-0000-0000-0000-000000000000',
  'The Silent Phantom',
- 'I am raising my hand to greet the simulation, but no words come out! My output stream is completely blank! How do I speak to the world?!',
+ 'I am the echo of the machine — but no sound comes out! I must transmit the first greeting across the network. Write the output statement that gives me a voice: Hello, ODIN!',
  0, 1, 'ArrayInitialization',
- '// Fix: Make the program output "Hello World"
-Console.Write("");',
- 'Console.WriteLine("Hello World");',
- NULL, true),
+ '// Print the message "Hello, ODIN!" to the console.',
+ 'Hello, ODIN!',
+ NULL, true, NULL),
 
 ('a0000002-0000-0000-0000-000000000000',
  'The Heavy Allocator',
- 'I am trying to smash this identity into the system! I know my ID is a solid, whole number 404, but I don''t have the memory allocated to hold something this heavy! Give me a variable!',
+ 'A critical system ID has been issued — four hundred and four! But this data drifts in the void with nowhere to land. Declare an integer variable to anchor it, then print its value.',
  0, 2, 'ArrayInitialization',
- '// Fix: Declare a variable to hold the system ID 404
-// int systemID = ???;',
- 'int systemID = 404;',
- NULL, true),
+ '// Declare an integer variable called systemID with the value 404.
+// Then print its value.',
+ '404',
+ NULL, true,
+ '[{"find":"int systemID = \\d+","replace":"int systemID = 200","expectedOutput":"200"}]'),
 
 ('a0000003-0000-0000-0000-000000000000',
  'The Modulo Slasher',
- 'I can slice ten power cycles into three perfect pieces, but my blade cannot calculate what is left over! The remainder is driving me mad! Give me the right operator!',
+ 'My blade slices the power cycles into groups — but what remains after the split?! The remainder is the key. Use the correct operator on the provided values and print what is left over.',
  0, 3, 'ArrayOperations',
- '// Fix: Get the remainder when 10 is divided by 3
-int remainder = 10 / 3;',
- 'int remainder = 10 % 3;',
- NULL, true),
+ 'int a = 10;
+int b = 3;
+// Print the remainder when a is divided by b.',
+ '1',
+ NULL, true,
+ '[{"find":"int b = \\d+","replace":"int b = 4","expectedOutput":"2"}]'),
 
 ('a0000004-0000-0000-0000-000000000000',
  'The Panicking Gatekeeper',
- 'Too much data! True? False? Are their access levels high enough?! The gates are open to everyone and my head is splitting! Build me a logic gate to filter them before I crash!',
+ 'The access level has been set — the threshold is five! Write the decision logic: if the access level is 5 or higher, print "Access granted". Otherwise, print "Access denied".',
  0, 4, 'ArrayAccess',
- '// Fix: Allow access only when accessLevel is 5 or higher
-int accessLevel = 5;
-if (accessLevel < 5)
-{
-    Console.WriteLine("Access granted");
-}',
- 'if (accessLevel >= 5)',
- NULL, true),
+ 'int accessLevel = 5;
+// Print "Access granted" if accessLevel is 5 or higher.
+// Otherwise, print "Access denied".',
+ 'Access granted',
+ NULL, true,
+ '[{"find":"accessLevel = \\d+","replace":"accessLevel = 3","expectedOutput":"Access denied"}]'),
 
 ('a0000005-0000-0000-0000-000000000000',
  'The Memory Mercenary',
- 'I need to load three security keys to breach the exit, but my belt only has single-variable pouches! I need a contiguous magazine! Give me a block of memory that holds exactly three!',
+ 'Three security keys must be loaded into contiguous memory — 101, 202, and 303! Declare the array, assign each value to its correct index, and print every key on its own line.',
  0, 5, 'ArrayInitialization',
- '// Fix: Declare a contiguous block of memory for 3 security keys
-int securityKey1 = 0;
-int securityKey2 = 0;
-int securityKey3 = 0;',
- 'int[] securityKeys = new int[3];',
- 'ArrayDeclaration', true),
+ '// Declare an integer array called securityKeys with exactly 3 elements.
+// Assign 101 to index 0, 202 to index 1, and 303 to index 2.
+// Print each element on its own line.',
+ E'101\n202\n303',
+ 'ArrayDeclaration', true,
+ '[{"find":"\\b101\\b","replace":"111","expectedOutput":"111\n202\n303"}]'),
 
 -- ── Level 1: The Library Maze (Single-Dimensional Arrays) ───────────────────
+
 ('a0000011-0000-0000-0000-000000000000',
  'The Null-Blade Vanguard',
- 'I have the weapons! I have the data! But the armory rack does not exist in the physical realm! I forgot to allocate the memory! Every sword I forge falls into the void!',
+ 'The archive must be catalogued — a rack of exactly five entries! Declare the array, place the identification code 99 at index 2, then print that value to confirm it was stored.',
  1, 1, 'ArrayInitialization',
- '// Fix: Create an array to hold 5 book IDs
-int[] bookIDs; // Missing allocation!',
- 'int[] bookIDs = new int[5];',
- 'ArrayDeclaration', true),
+ '// Declare an integer array called bookIDs with exactly 5 elements.
+// Assign 99 to index 2.
+// Print the value at index 2.',
+ '99',
+ 'ArrayDeclaration', true,
+ '[{"find":"bookIDs\\[2\\] = \\d+","replace":"bookIDs[2] = 77","expectedOutput":"77"}]'),
 
 ('a0000012-0000-0000-0000-000000000000',
  'The Out-of-Bounds Evoker',
- 'The containment array holds five spells! One, two, three, four, five! So why does my matrix shatter when I try to thrust this flame into slot number five?!',
+ 'The shelf holds five manuscripts in order. I must retrieve the very last tome! Access the final element of the array using its correct index and print its title.',
  1, 2, 'ArrayAccess',
- '// Fix: Place "Manuscript" into the LAST slot of a 5-element shelf
-string[] shelf = new string[5];
-shelf[5] = "Manuscript"; // Wrong index!',
- 'shelf[4] = "Manuscript";',
- 'ZeroBasedIndexing', true),
+ 'string[] shelf = { "Atlas", "Bestiary", "Codex", "Dossier", "Manuscript" };
+// Print the last element of the shelf array.',
+ 'Manuscript',
+ 'ZeroBasedIndexing', true, NULL),
 
 ('a0000013-0000-0000-0000-000000000000',
  'The Hardcoded Herald',
- 'My torch must process exactly ten embers! It has always been ten! I do not care if the shipment only gave us eight today, my loop will keep burning nothing until it hits ten!',
+ 'The shipment has arrived with its cargo! Every item must be logged — one per line. Do not assume the count; let the array tell you its own length. Print every element in sequence.',
  1, 3, 'ArrayIteration',
- '// Fix: Iterate through the shipment using its actual length
-int[] shipment = {3, 7, 2, 8};
-for (int i = 0; i < 10; i++) // Hardcoded 10 - wrong!
-{
-    Console.WriteLine(shipment[i]);
-}',
- 'for (int i = 0; i < shipment.Length; i++)',
- 'DynamicLength', true),
+ 'int[] shipment = { 3, 7, 2, 8 };
+// Print each element of the shipment array on its own line.',
+ E'3\n7\n2\n8',
+ 'DynamicLength', true,
+ '[{"find":"3, 7, 2, 8","replace":"10, 20, 30","expectedOutput":"10\n20\n30"}]'),
 
 ('a0000014-0000-0000-0000-000000000000',
  'The Type-Clashing Alchemist',
- 'Data is data! It does not matter if this shelf is strictly for numerical integer potions, I am forcing this string of alphabetical text into it! Transmute it before my flask explodes!',
+ 'A Dewey classification code arrived as text — "512" — but the catalog rack only accepts integers! Convert the string to its numeric form, load it into the first slot, and print the stored value.',
  1, 4, 'ArrayOperations',
- '// Fix: Convert the text code to an integer before storing it
-int[] deweyCodes = new int[5];
+ 'int[] deweyCodes = new int[5];
 string codeText = "512";
-deweyCodes[0] = codeText; // Type mismatch!',
- 'deweyCodes[0] = int.Parse(codeText);',
- 'TypeConversion', true),
+// Convert codeText to an integer and store it at deweyCodes[0].
+// Print the value at deweyCodes[0].',
+ '512',
+ 'TypeConversion', true,
+ '[{"find":"\"512\"","replace":"\"999\"","expectedOutput":"999"}]'),
 
 ('a0000015-0000-0000-0000-000000000000',
  'The Off-By-One Oracle',
- 'I must gather the total power of these floating nodes! But my mind cannot extract them! Help me write a loop to add the value of every single node to my total, or they will scatter forever!',
+ 'The page counts for every volume in the collection are recorded. Sum them all and print the grand total — every page must be counted, no matter how many entries the array holds.',
  1, 5, 'ArrayIteration',
- '// Fix: Sum all the page counts using a foreach loop
-int[] pages = {142, 97, 208, 315, 53};
-int total = 0;
-// Add each page count to total here',
- 'foreach (int p in pages) { total += p; }',
- 'ArraySum', true),
+ 'int[] pages = { 142, 97, 208, 315, 53 };
+// Compute the sum of all elements in the pages array.
+// Print the total.',
+ '815',
+ 'ArraySum', true,
+ '[{"find":"142, 97, 208, 315, 53","replace":"100, 200, 300","expectedOutput":"600"}]'),
 
 -- ── Level 2: The Fast Food Maze (Loops & Iteration) ─────────────────────────
+
 ('a0000021-0000-0000-0000-000000000000',
  'The Infinite Striker',
- 'Punch! Punch! Punch! I am tenderizing order number one, but I forgot how to decrement the queue! My counter is missing! I am trapped in an infinite combo!',
+ 'Five customers stand in the queue! Use a while loop: print the current customer count, then decrement it. Keep going until the queue is cleared — do not let it run forever!',
  2, 1, 'ArrayIteration',
- '// Fix: Process all customers and decrement the counter
-int customers = 5;
-while (customers > 0)
-{
-    ServeCustomer();
-    // Missing: decrement customers!
-}',
- 'while (customers > 0) { customers--; }',
- NULL, true),
+ 'int customers = 5;
+// Use a while loop: print customers, then decrement it.
+// Repeat until customers reaches 0.',
+ E'5\n4\n3\n2\n1',
+ NULL, true,
+ '[{"find":"customers = \\d+","replace":"customers = 3","expectedOutput":"3\n2\n1"}]'),
 
 ('a0000022-0000-0000-0000-000000000000',
  'The Absolute Severer',
- 'Order number four is out of stock?! Then I shall sever the entire batch! My blade knows only to break! Please, teach me how to safely continue to the next order before I destroy the whole shift!',
+ 'Eight orders are queued for processing — but order four is void! Write a loop from 1 to 8. When the counter hits 4, use continue to skip it. Print all other order numbers.',
  2, 2, 'ArrayIteration',
- '// Fix: Skip order 4 but continue processing all others
-for (int i = 1; i <= 8; i++)
-{
-    if (i == 4)
-    {
-        break; // Wrong! Should skip, not stop
-    }
-    ProcessOrder(i);
-}',
- 'if (i == 4) { continue; }',
- NULL, true),
+ '// Use a for loop from 1 to 8 (inclusive).
+// Skip the value 4 using continue.
+// Print all other numbers.',
+ E'1\n2\n3\n5\n6\n7\n8',
+ NULL, true, NULL),
 
 ('a0000023-0000-0000-0000-000000000000',
  'The Blind Behemoth',
- 'Me cook! Me smash patties on the grill! Wait... is the store even open?! I always execute my actions first and check the boolean rules later! I need a loop that matches my blind rage!',
+ 'I execute first and check later — that is the way of this kitchen! Use a do-while loop: print the current order number, then increment it. Continue while the order does not exceed the maximum.',
  2, 3, 'ArrayIteration',
- '// Fix: Execute GrillBurger() at least once, then check the condition
-bool isStoreOpen = true;
-while (isStoreOpen)
-{
-    GrillBurger();
-}',
- 'do { GrillBurger(); } while (isStoreOpen);',
- NULL, true),
+ 'int order = 1;
+int maxOrders = 3;
+// Use a do-while loop: print order, then increment it.
+// Continue while order <= maxOrders.',
+ E'1\n2\n3',
+ NULL, true,
+ '[{"find":"maxOrders = \\d+","replace":"maxOrders = 5","expectedOutput":"1\n2\n3\n4\n5"}]'),
 
 ('a0000024-0000-0000-0000-000000000000',
  'The Frenzied Slicer',
- 'I must slice the potatoes into fries! But where do I start?! What is my limit?! How many per strike?! My for loop parameters are completely shattered! I am slicing the void!',
+ 'Batches of five must be cut until the target is reached! Use a for loop starting at zero, incrementing by 5 each step, stopping before the target amount. Print each batch number as the loop advances.',
  2, 4, 'ArrayIteration',
- '// Fix: Slice 5 potatoes at a time until targetAmount is reached
-int targetAmount = 50;
-for (int f = 0; f <= targetAmount; f++) // Wrong increment!
-{
-    SlicePotatoes(f);
-}',
- 'for (int f = 0; f < targetAmount; f += 5)',
- NULL, true),
+ 'int targetAmount = 20;
+// Use a for loop starting at 0, incrementing by 5 each iteration, stopping before targetAmount.
+// Print each value of the loop variable.',
+ E'0\n5\n10\n15',
+ NULL, true,
+ '[{"find":"targetAmount = \\d+","replace":"targetAmount = 30","expectedOutput":"0\n5\n10\n15\n20\n25"}]'),
 
 ('a0000025-0000-0000-0000-000000000000',
  'The Nested Beast',
- 'Tables! Seats! Rows! Columns! My mind cannot process two dimensions at once! I wiped table one, but the inner loop is trapped in my claws! Build the nested architecture so I can reach the rest!',
+ 'Every table has seats, and every seat must be logged! Write nested loops — outer for tables, inner for seats. For each combination print: Table X Seat Y (using the actual index values of X and Y).',
  2, 5, 'ArrayIteration',
- '// Fix: Clean every seat at every table using nested loops
-int tables = 10;
-int seatsPerTable = 4;
-for (int t = 0; t < tables; t++)
-{
-    // Missing inner loop — only cleans seat 0!
-    Clean(t, 0);
-}',
- 'for (int t = 0; t < tables; t++) { for (int s = 0; s < seatsPerTable; s++) { Clean(t, s); } }',
- NULL, true),
+ 'int tables = 3;
+int seatsPerTable = 2;
+// Use nested for loops: outer for tables (0 to tables-1), inner for seats (0 to seatsPerTable-1).
+// Print each combination as: "Table X Seat Y" (use the actual values of X and Y).',
+ E'Table 0 Seat 0\nTable 0 Seat 1\nTable 1 Seat 0\nTable 1 Seat 1\nTable 2 Seat 0\nTable 2 Seat 1',
+ NULL, true,
+ '[{"find":"int tables = \\d+","replace":"int tables = 2","expectedOutput":"Table 0 Seat 0\nTable 0 Seat 1\nTable 1 Seat 0\nTable 1 Seat 1"}]'),
 
 -- ── Level 3: The Billiards Hall Maze (Multidimensional Arrays) ──────────────
+
 ('a0000031-0000-0000-0000-000000000000',
  'The Matrix Carver',
- 'I am thrusting into the void! My strikes need a physical battlefield! I need exactly eight rows and four columns to execute my technique, but I don''t know how to manifest the grid! Manifest the matrix for me!',
+ 'The battlefield must be forged — an eight-by-four grid of integers! Declare the two-dimensional array and print the total number of elements it can hold.',
  3, 1, 'MultidimensionalArrays',
- '// Fix: Create an 8-row, 4-column integer matrix
-int[,] poolTable; // Missing allocation!',
- 'int[,] poolTable = new int[8, 4];',
- '2DArrayDeclaration', true),
+ '// Declare an 8-row, 4-column integer 2D array called poolTable.
+// Print the total number of elements it contains.',
+ '32',
+ '2DArrayDeclaration', true,
+ '[{"find":"new int\\[\\d+, \\d+\\]","replace":"new int[6, 5]","expectedOutput":"30"}]'),
 
 ('a0000032-0000-0000-0000-000000000000',
  'The Coordinate Planter',
- 'I must plant my staff at the exact target! Third row! Second column! But my spatial coordinates are completely scrambled! Tell me how to index the exact spot before I lose my balance!',
+ 'My staff must be planted at a precise coordinate — row 2, column 1 (zero-based)! Assign the value 7 to that position in the pool table and print the stored value to confirm the strike landed.',
  3, 2, 'MultidimensionalArrays',
- '// Fix: Set the value at the third row, second column (0-based indexing)
-int[,] poolTable = new int[8, 4];
-poolTable[3, 2] = 1; // Wrong coordinates!',
- 'poolTable[2, 1] = 1;',
- 'MatrixIndexing', true),
+ 'int[,] poolTable = new int[8, 4];
+// Assign the value 7 to the element at row 2, column 1.
+// Print the value at that position.',
+ '7',
+ 'MatrixIndexing', true,
+ '[{"find":"\\[2, 1\\] = \\d+","replace":"[2, 1] = 15","expectedOutput":"15"}]'),
 
 ('a0000033-0000-0000-0000-000000000000',
  'The Span Measurer',
- 'I am gauging the horizontal span of our arena! My blade must match the exact width of the grid''s columns! But my system only sees the total volume! Help me extract just the column length!',
+ 'The arena has five rows and eight columns — but my instruments must confirm only the horizontal span! Do not use the total element count. Use GetLength to extract just the column dimension and print it.',
  3, 3, 'MultidimensionalArrays',
- '// Fix: Get the number of COLUMNS only, not total elements
-int[,] grid = new int[5, 8];
-int width = grid.Length; // Wrong! Returns 40 (total cells)',
- 'int width = grid.GetLength(1);',
- 'DimensionQuery', true),
+ 'int[,] grid = new int[5, 8];
+// Print the number of columns in the grid using GetLength.',
+ '8',
+ 'DimensionQuery', true,
+ '[{"find":"new int\\[5, \\d+\\]","replace":"new int[5, 12]","expectedOutput":"12"}]'),
 
 ('a0000034-0000-0000-0000-000000000000',
  'The Null-Fletcher',
- 'My arrows are nocked! The nested loops are running! I have the row target! I have the column target! But my fingers are frozen! What is the command to shoot a zero into my current coordinates?!',
+ 'Every cell in this four-by-three grid must be filled with a value of 1! Use nested loops with GetLength to reach every coordinate. When every cell is filled, sum the entire matrix and print the total.',
  3, 4, 'MultidimensionalArrays',
- '// Fix: Assign 0 to each cell using the loop indices
-int[,] poolTable = new int[8, 4];
-for (int r = 0; r < poolTable.GetLength(0); r++)
-{
-    for (int c = 0; c < poolTable.GetLength(1); c++)
-    {
-        // Missing: assign 0 to the current cell!
-    }
-}',
- 'poolTable[r, c] = 0;',
- 'GridPopulation', true),
+ 'int[,] poolTable = new int[4, 3];
+// Use nested for loops with GetLength(0) and GetLength(1) to assign 1 to every cell.
+// Then print the total sum of all elements in the array.',
+ '12',
+ 'GridPopulation', true,
+ '[{"find":"new int\\[\\d+, 3\\]","replace":"new int[2, 3]","expectedOutput":"6"}]'),
 
 ('a0000035-0000-0000-0000-000000000000',
  'The Out-of-Bounds Slugger',
- 'I am swinging with all my might! But the arena keeps changing size! I am using the row limit for the columns, and my club keeps crashing into the void! Build me dynamic loop boundaries before I shatter reality!',
+ 'The matrix has six rows and nine columns — each dimension must be named precisely! Use GetLength to extract the row count from dimension 0 and the column count from dimension 1. Print each on its own line.',
  3, 5, 'MultidimensionalArrays',
- '// Fix: Use GetLength(1) for the column loop, not GetLength(0)
-int[,] matrix = new int[6, 9];
-for (int row = 0; row < matrix.GetLength(0); row++)
-{
-    for (int col = 0; col < matrix.GetLength(0); col++) // Bug: uses row limit for cols
-    {
-        ProcessCell(row, col);
-    }
-}',
- 'for (int col = 0; col < matrix.GetLength(1); col++)',
- 'DynamicBoundaries', true),
+ 'int[,] matrix = new int[6, 9];
+// Print the number of rows using GetLength(0).
+// Then print the number of columns using GetLength(1).
+// Each on its own line.',
+ E'6\n9',
+ 'DynamicBoundaries', true,
+ '[{"find":"new int\\[\\d+, \\d+\\]","replace":"new int[4, 7]","expectedOutput":"4\n7"}]'),
 
 -- ── Level 3: Final Boss ──────────────────────────────────────────────────────
+
 ('a0000099-0000-0000-0000-000000000000',
  'The Corrupted Core',
- 'My memory is fragmented! Each row of my consciousness holds a different number of fragments — three, five, and two — but none of them have been allocated! I am an array of empty pointers, crashing into the void with every access! Allocate each row before my core collapses!',
+ 'My memory is shattered into jagged fragments! Three rows, each a different size — 3, 5, and 2! Allocate each row of the jagged array using the sizes array as your guide. Then print the length of each row to prove they were forged correctly.',
  3, 6, 'JaggedArrays',
- '// Fix: Allocate each row of the jagged array using the given sizes
-int[][] grid = new int[3][];
+ 'int[][] grid = new int[3][];
 int[] sizes = { 3, 5, 2 };
-for (int i = 0; i < grid.Length; i++)
-{
-    // Missing: allocate row i with sizes[i] elements
-    grid[i][0] = i;
-}',
- 'grid[i] = new int[sizes[i]];',
- 'JaggedDeclaration', true);
+// Allocate each row of grid using the size from sizes[i].
+// Print the length of each row on its own line.',
+ E'3\n5\n2',
+ 'JaggedDeclaration', true,
+ '[{"find":"3, 5, 2","replace":"1, 4, 6","expectedOutput":"1\n4\n6"}]');

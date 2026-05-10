@@ -70,6 +70,7 @@ Models/Domain/
  Puzzle.cs
  ScaffoldingHint.cs
 Models/DTOs/
+ SecondaryTestCase.cs
  SubmissionRequest.cs
  SubmissionResponse.cs
 Models/Enums/
@@ -85,10 +86,13 @@ Program.cs
 Services/
  AffectiveStateService.cs
  BktService.cs
+ CodeExecutionService.cs
  DiagnosticEngine.cs
  EditDistanceCalculator.cs
  HbdaService.cs
- Interfaces/IServices.cs
+ Interfaces/
+  ICodeExecutionService.cs
+  IServices.cs
  InterventionController.cs
 
 [metadataReferences]

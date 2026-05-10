@@ -50,6 +50,7 @@ builder.Services.AddAuthorization();
 // ═══════════════════════════════════════════════════════════
 builder.Services.AddScoped<IHbdaService, HbdaService>();
 builder.Services.AddSingleton<IDiagnosticEngine, DiagnosticEngine>();
+builder.Services.AddSingleton<ICodeExecutionService, CodeExecutionService>();
 builder.Services.AddScoped<IBktService, BktService>();
 builder.Services.AddScoped<IAffectiveStateService, AffectiveStateService>();
 builder.Services.AddScoped<IInterventionController, InterventionControllerService>();
