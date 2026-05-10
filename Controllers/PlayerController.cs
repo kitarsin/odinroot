@@ -62,7 +62,7 @@ public class PlayerController : ControllerBase
         if (player == null) return NotFound();
 
         // Reset all game stats
-        player.CurrentLevel = 1;
+        player.CurrentLevel = 0;
         player.ExperiencePoints = 0;
         player.HelplessnessScore = 0;
         player.TotalSubmissions = 0;

@@ -21,7 +21,7 @@ public class Player
     public string Achievements { get; set; } = "[]";  // jsonb
 
     // ── ODIN-specific columns (added by migration) ──
-    public int CurrentLevel { get; set; } = 1;
+    public int CurrentLevel { get; set; } = 0;
     public int ExperiencePoints { get; set; } = 0;
     public double HelplessnessScore { get; set; } = 0;
     public int TotalSubmissions { get; set; } = 0;
