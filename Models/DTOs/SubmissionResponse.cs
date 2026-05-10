@@ -59,6 +59,9 @@ public class SubmissionResponse
 
     /// <summary>XP reward earned (0 if rejected or incorrect).</summary>
     public int XpAwarded { get; set; }
+
+    /// <summary>Names of any achievements unlocked by this submission (empty if none).</summary>
+    public List<string> NewAchievements { get; set; } = new();
 }
 
 /// <summary>

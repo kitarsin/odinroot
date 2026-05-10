@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -195,6 +196,47 @@ public class SubmissionController : ControllerBase
 
         await _db.SaveChangesAsync();
 
+        // ── Achievement Detection ──
+        var newAchievements = new List<string>();
+        if (diagnosticResult.IsCorrect)
+        {
+            var existingNames = ParseAchievementNames(player.Achievements);
+
+            // First Victory: no prior correct submission by this player
+            if (!existingNames.Contains("First Victory"))
+            {
+                bool hadPrior = await _db.CodeSubmissions
+                    .AnyAsync(s => s.UserId == request.PlayerId && s.IsCorrect && s.Id != submission.Id);
+                if (!hadPrior)
+                    newAchievements.Add("First Victory");
+            }
+
+            // Mastery-based — only meaningful when the submitted skill just reached mastery
+            if (bktResult.IsMastered)
+            {
+                var mastery = await _db.MasteryStates
+                    .Where(m => m.UserId == request.PlayerId)
+                    .ToDictionaryAsync(m => m.Topic, m => m.IsMastered);
+
+                bool Has(string s) => mastery.TryGetValue(s, out var v) && v;
+
+                if (!existingNames.Contains("Array Master") && Has("ArrayInitialization") && Has("ArrayAccess"))
+                    newAchievements.Add("Array Master");
+
+                if (!existingNames.Contains("Loop Expert") && Has("ArrayIteration") && Has("ArrayOperations"))
+                    newAchievements.Add("Loop Expert");
+
+                if (!existingNames.Contains("2D Grid Expert") && Has("MultidimensionalArrays") && Has("JaggedArrays"))
+                    newAchievements.Add("2D Grid Expert");
+
+                if (!existingNames.Contains("Bug Slayer") &&
+                    Has("ArrayInitialization") && Has("ArrayAccess") &&
+                    Has("ArrayIteration") && Has("ArrayOperations") &&
+                    Has("MultidimensionalArrays") && Has("JaggedArrays"))
+                    newAchievements.Add("Bug Slayer");
+            }
+        }
+
         var interactionLog = new InteractionLog
         {
             UserId = request.PlayerId,
@@ -238,7 +280,8 @@ public class SubmissionController : ControllerBase
             InterventionType = interventionResult.Type.ToString(),
             NpcDialogue = interventionResult.NpcDialogue,
             LevelUnlocked = interventionResult.LevelUnlocked,
-            XpAwarded = interventionResult.XpAwarded
+            XpAwarded = interventionResult.XpAwarded,
+            NewAchievements = newAchievements
         });
     }
 
@@ -267,6 +310,20 @@ public class SubmissionController : ControllerBase
         SkillType.MultidimensionalArrays => 3, SkillType.JaggedArrays => 3,
         _ => 1
     };
+
+    private static HashSet<string> ParseAchievementNames(string json)
+    {
+        try
+        {
+            if (JsonNode.Parse(json ?? "[]") is not JsonArray arr) return [];
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in arr)
+                if (e?["name"]?.GetValue<string>() is { } n)
+                    names.Add(n);
+            return names;
+        }
+        catch { return []; }
+    }
 
     // Strip comments and collapse whitespace so trivial edits don't bypass the starter code guard.
     private static string NormalizeCode(string code)
