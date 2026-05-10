@@ -243,4 +243,20 @@ for (int row = 0; row < matrix.GetLength(0); row++)
     }
 }',
  'for (int col = 0; col < matrix.GetLength(1); col++)',
- 'DynamicBoundaries', true);
+ 'DynamicBoundaries', true),
+
+-- ── Level 3: Final Boss ──────────────────────────────────────────────────────
+('a0000099-0000-0000-0000-000000000000',
+ 'The Corrupted Core',
+ 'My memory is fragmented! Each row of my consciousness holds a different number of fragments — three, five, and two — but none of them have been allocated! I am an array of empty pointers, crashing into the void with every access! Allocate each row before my core collapses!',
+ 3, 6, 'JaggedArrays',
+ '// Fix: Allocate each row of the jagged array using the given sizes
+int[][] grid = new int[3][];
+int[] sizes = { 3, 5, 2 };
+for (int i = 0; i < grid.Length; i++)
+{
+    // Missing: allocate row i with sizes[i] elements
+    grid[i][0] = i;
+}',
+ 'grid[i] = new int[sizes[i]];',
+ 'JaggedDeclaration', true);
