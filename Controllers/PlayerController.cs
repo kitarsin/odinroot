@@ -53,6 +53,31 @@ public class PlayerController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{userId:guid}/reset")]
+    public async Task<ActionResult> ResetProgress(Guid userId)
+    {
+        var player = await _db.Players
+            .Include(p => p.MasteryStates)
+            .FirstOrDefaultAsync(p => p.Id == userId);
+        if (player == null) return NotFound();
+
+        // Reset all game stats
+        player.CurrentLevel = 1;
+        player.ExperiencePoints = 0;
+        player.HelplessnessScore = 0;
+        player.TotalSubmissions = 0;
+        player.GameState = "{}";
+        player.SyncRate = 0;
+        player.Achievements = "[]";
+        player.UpdatedAt = DateTime.UtcNow;
+
+        // Wipe all BKT mastery rows — they will be recreated on first submission
+        _db.MasteryStates.RemoveRange(player.MasteryStates);
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     [HttpGet("{userId:guid}/history")]
     public async Task<ActionResult> GetPlayerHistory(Guid userId, [FromQuery] int limit = 50)
     {
