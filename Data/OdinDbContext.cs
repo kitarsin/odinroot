@@ -14,6 +14,7 @@ public class OdinDbContext : DbContext
     public DbSet<InteractionLog> InteractionLogs => Set<InteractionLog>();
     public DbSet<ScaffoldingHint> ScaffoldingHints => Set<ScaffoldingHint>();
     public DbSet<Puzzle> Puzzles => Set<Puzzle>();
+    public DbSet<KeystrokeRawEventBatch> KeystrokeRawEventBatches => Set<KeystrokeRawEventBatch>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -140,6 +141,21 @@ public class OdinDbContext : DbContext
             e.Property(h => h.TechnicalHint).HasColumnName("technical_hint");
             e.Property(h => h.IsActive).HasColumnName("is_active");
             e.HasIndex(h => new { h.DiagnosticCategory, h.SkillType, h.Tier });
+        });
+
+        // ── keystroke_raw_events → KeystrokeRawEventBatch ──
+        modelBuilder.Entity<KeystrokeRawEventBatch>(e =>
+        {
+            e.ToTable("keystroke_raw_events");
+            e.HasKey(k => k.Id);
+            e.Property(k => k.Id).HasColumnName("id");
+            e.Property(k => k.SubmissionId).HasColumnName("submission_id");
+            e.Property(k => k.UserId).HasColumnName("user_id");
+            e.Property(k => k.SessionId).HasColumnName("session_id");
+            e.Property(k => k.Events).HasColumnName("events").HasColumnType("jsonb");
+            e.Property(k => k.CapturedAt).HasColumnName("captured_at");
+            e.HasIndex(k => k.SubmissionId);
+            e.HasIndex(k => k.UserId);
         });
 
         // ── puzzles → Puzzle ──

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ODIN.Api.Data;
@@ -137,6 +138,19 @@ public class SubmissionController : ControllerBase
             SkillType = request.SkillType
         };
         _db.InteractionLogs.Add(interactionLog);
+
+        // Persist raw keystroke events if the game client sent them
+        if (request.KeystrokeData.RawEvents is { Count: > 0 } rawEvents)
+        {
+            _db.KeystrokeRawEventBatches.Add(new KeystrokeRawEventBatch
+            {
+                SubmissionId = submission.Id,
+                UserId       = request.PlayerId,
+                SessionId    = request.SessionId,
+                Events       = JsonSerializer.Serialize(rawEvents)
+            });
+        }
+
         await _db.SaveChangesAsync();
 
         return Ok(new SubmissionResponse
@@ -157,6 +171,24 @@ public class SubmissionController : ControllerBase
             LevelUnlocked = interventionResult.LevelUnlocked,
             XpAwarded = interventionResult.XpAwarded
         });
+    }
+
+    [HttpGet("session/{sessionId:guid}")]
+    public async Task<ActionResult> GetSessionSubmissions(Guid sessionId)
+    {
+        var submissions = await _db.CodeSubmissions
+            .Where(s => s.SessionId == sessionId)
+            .OrderBy(s => s.SubmittedAt)
+            .Select(s => new
+            {
+                s.Id, s.SubmittedAt, s.IsCorrect, s.SkillType,
+                s.BehaviorState, s.DiagnosticCategory, s.DiagnosticMessage,
+                s.InterventionType, s.AverageFlightTimeMs, s.AverageDwellTimeMs,
+                s.InitialLatencyMs, s.TotalTimeSeconds, s.HintUsageCount,
+                s.EditDistance, s.SubmissionIntervalSeconds
+            })
+            .ToListAsync();
+        return Ok(submissions);
     }
 
     private static int GetDungeonLevelForSkill(SkillType skill) => skill switch

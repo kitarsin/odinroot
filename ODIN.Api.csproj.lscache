@@ -65,6 +65,7 @@ Models/Domain/
  CodeSubmission.cs
  GameSession.cs
  InteractionLog.cs
+ KeystrokeRawEventBatch.cs
  Player.cs
  Puzzle.cs
  ScaffoldingHint.cs
