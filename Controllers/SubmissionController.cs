@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ODIN.Api.Data;
@@ -44,8 +45,21 @@ public class SubmissionController : ControllerBase
         if (!Enum.TryParse<SkillType>(request.SkillType, true, out var skillTypeEnum))
             return BadRequest(new { error = "Invalid SkillType", value = request.SkillType });
 
+        // ── Fetch puzzle for starter code comparison ──
+        Puzzle? puzzle = null;
+        if (Guid.TryParse(request.PuzzleId, out var puzzleGuid))
+            puzzle = await _db.Puzzles.FindAsync(puzzleGuid);
+
         // ── Stage 2: AST Diagnosis ──
         var diagnosticResult = _diagnosticEngine.Diagnose(request.SourceCode, skillTypeEnum);
+
+        // ── Starter Code Guard: reject submissions identical to the starter template ──
+        if (puzzle != null && NormalizeCode(request.SourceCode) == NormalizeCode(puzzle.StarterCode))
+        {
+            diagnosticResult.IsCorrect = false;
+            diagnosticResult.Category = DiagnosticCategory.UnchangedStarterCode;
+            diagnosticResult.Message = "Your code matches the provided starter template. Write your own solution — submitting the starting code unchanged won't count.";
+        }
 
         // ── Retrieve previous submission for edit distance ──
         var previousSubmission = await _db.CodeSubmissions
@@ -198,4 +212,13 @@ public class SubmissionController : ControllerBase
         SkillType.MultidimensionalArrays => 3, SkillType.JaggedArrays => 3,
         _ => 1
     };
+
+    // Strip comments and collapse whitespace so trivial edits (adding spaces / comments)
+    // don't bypass the starter-code identity check.
+    private static string NormalizeCode(string code)
+    {
+        code = Regex.Replace(code, @"//[^\r\n]*", "", RegexOptions.Multiline);
+        code = Regex.Replace(code, @"/\*.*?\*/", "", RegexOptions.Singleline);
+        return Regex.Replace(code, @"\s+", " ").Trim();
+    }
 }

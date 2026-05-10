@@ -34,5 +34,8 @@ public enum DiagnosticCategory
     InfiniteLoop,
 
     /// <summary>Generic logic error not covered by specific rules.</summary>
-    GenericLogicError
+    GenericLogicError,
+
+    /// <summary>Submitted code is identical to the provided starter template — no solution attempt detected.</summary>
+    UnchangedStarterCode
 }
