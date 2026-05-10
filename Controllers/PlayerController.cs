@@ -4,6 +4,8 @@ using ODIN.Api.Data;
 
 namespace ODIN.Api.Controllers;
 
+public record GameStateRequest(string Data);
+
 [ApiController]
 [Route("api/[controller]")]
 public class PlayerController : ControllerBase
@@ -30,6 +32,25 @@ public class PlayerController : ControllerBase
                 m.IsMastered, m.AttemptCount, m.ConsecutiveCorrect
             })
         });
+    }
+
+    [HttpGet("{userId:guid}/gamestate")]
+    public async Task<ActionResult> GetGameState(Guid userId)
+    {
+        var player = await _db.Players.FirstOrDefaultAsync(p => p.Id == userId);
+        if (player == null) return NotFound();
+        return Ok(new { gameState = player.GameState });
+    }
+
+    [HttpPut("{userId:guid}/gamestate")]
+    public async Task<ActionResult> PutGameState(Guid userId, [FromBody] GameStateRequest req)
+    {
+        var player = await _db.Players.FirstOrDefaultAsync(p => p.Id == userId);
+        if (player == null) return NotFound();
+        player.GameState = req.Data;
+        player.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return NoContent();
     }
 
     [HttpGet("{userId:guid}/history")]

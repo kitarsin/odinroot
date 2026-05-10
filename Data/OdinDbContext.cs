@@ -40,6 +40,7 @@ public class OdinDbContext : DbContext
             e.Property(p => p.HelplessnessScore).HasColumnName("helplessness_score");
             e.Property(p => p.TotalSubmissions).HasColumnName("total_submissions");
             e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.GameState).HasColumnName("game_state").HasColumnType("jsonb");
             e.HasIndex(p => p.StudentId).IsUnique();
         });
 

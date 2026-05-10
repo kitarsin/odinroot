@@ -26,6 +26,7 @@ public class Player
     public double HelplessnessScore { get; set; } = 0;
     public int TotalSubmissions { get; set; } = 0;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public string GameState { get; set; } = "{}"; // JSONB: Godot player_data (character, level, enemies, dialogues)
 
     // Navigation properties
     public ICollection<GameSession> GameSessions { get; set; } = new List<GameSession>();
