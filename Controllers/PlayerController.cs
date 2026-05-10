@@ -61,7 +61,26 @@ public class PlayerController : ControllerBase
             .FirstOrDefaultAsync(p => p.Id == userId);
         if (player == null) return NotFound();
 
-        // Reset all game stats
+        // Delete in FK-safe order so no constraint violations
+        var keystrokeBatches = await _db.KeystrokeRawEventBatches
+            .Where(k => k.UserId == userId).ToListAsync();
+        _db.KeystrokeRawEventBatches.RemoveRange(keystrokeBatches);
+
+        var logs = await _db.InteractionLogs
+            .Where(l => l.UserId == userId).ToListAsync();
+        _db.InteractionLogs.RemoveRange(logs);
+
+        var submissions = await _db.CodeSubmissions
+            .Where(s => s.UserId == userId).ToListAsync();
+        _db.CodeSubmissions.RemoveRange(submissions);
+
+        var sessions = await _db.GameSessions
+            .Where(s => s.UserId == userId).ToListAsync();
+        _db.GameSessions.RemoveRange(sessions);
+
+        _db.MasteryStates.RemoveRange(player.MasteryStates);
+
+        // Reset all player stats
         player.CurrentLevel = 0;
         player.ExperiencePoints = 0;
         player.HelplessnessScore = 0;
@@ -70,9 +89,6 @@ public class PlayerController : ControllerBase
         player.SyncRate = 0;
         player.Achievements = "[]";
         player.UpdatedAt = DateTime.UtcNow;
-
-        // Wipe all BKT mastery rows — they will be recreated on first submission
-        _db.MasteryStates.RemoveRange(player.MasteryStates);
 
         await _db.SaveChangesAsync();
         return NoContent();
