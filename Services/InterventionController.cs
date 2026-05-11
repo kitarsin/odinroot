@@ -13,17 +13,18 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
     private const int XpMasteryBonus   = 500;
 
     /// <summary>
-    /// States marked "retained" by the psychologist's transition model.
-    /// If the student is already in one of these states, do NOT re-intervene —
-    /// only a genuine state *transition* warrants a new intervention.
+    /// "Retained" states per the psychologist's §5.2 transition model.
+    /// The system keeps the previous label when the same state recurs —
+    /// no re-intervention fires unless the state has genuinely changed.
+    /// GamingTheSystem is intentionally excluded: every paste is a fresh
+    /// deliberate action that must always be intercepted.
     /// </summary>
     private static readonly HashSet<string> RetainedStates = new(StringComparer.OrdinalIgnoreCase)
     {
         nameof(BehaviorState.ActiveThinking),
         nameof(BehaviorState.WheelSpinning),
-        nameof(BehaviorState.GamingTheSystem),
-        "Normal",   // default HBDA fallback
-        "",         // no prior state (first submission)
+        "Normal",
+        "",
     };
 
     public async Task<InterventionResult> DetermineInterventionAsync(
@@ -38,7 +39,7 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
         var result = new InterventionResult();
 
         // ── Phase 1 Baseline Guard ──
-        // First submission establishes the baseline — never trigger dialogue.
+        // First submission establishes the baseline - never trigger dialogue.
         if (isFirstSubmission)
         {
             if (bktResult.IsMastered && diagnosticResult.IsCorrect)
@@ -49,7 +50,24 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
             return result;
         }
 
-        // ── Mastery + Correct → Level Unlock ──
+        // ── GamingTheSystem — Highest Priority ──
+        // Must be checked BEFORE correctness rewards.
+        // A pasted correct answer is NOT a genuine solution; the student must
+        // engage with the problem deliberately. Each paste is an independent
+        // action so we do NOT apply the retention gate here.
+        if (behaviorState == BehaviorState.GamingTheSystem)
+        {
+            result.Type       = InterventionType.Rejection;
+            result.NpcDialogue = await FetchScaffoldingHintAsync(
+                BehaviorState.GamingTheSystem.ToString(),
+                diagnosticResult.Category.ToString(),
+                skillType.ToString(),
+                currentHintTier);
+            // XpAwarded intentionally left at 0 - rejected submission earns nothing
+            return result;
+        }
+
+        // ── Mastery + Correct -> Level Unlock ──
         if (bktResult.IsMastered && diagnosticResult.IsCorrect)
         {
             result.Type        = InterventionType.LevelUnlock;
@@ -83,44 +101,32 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
         }
 
         // ── State-Transition Gate (psychologist §5.2) ──
-        // "Retained" labels mean the system keeps the previous state when
-        // the same behaviour is detected again — no re-intervention fires.
-        // An intervention only triggers on a meaningful state *change*.
+        // Retained labels suppress re-intervention when the same state persists.
+        // An intervention only fires on a meaningful state change.
         //
         // Examples:
-        //   WS → WS  (retained): silent — student is still wheel-spinning, no new signal
-        //   AT → PD  (transition): fire PD hint — student moved from productive to stuck
-        //   PD → TE  (transition): fire TE hint — student is now rapid-cycling
-        //   GS → GS  (retained): silent — already rejected once, no need to repeat
+        //   WS -> WS  (retained): silent - still wheel-spinning, no new signal
+        //   AT -> PD  (transition): fire PD hint - moved from productive to stuck
+        //   PD -> TE  (transition): fire TE hint - now rapid-cycling
         string currentStateName = behaviorState.ToString();
         bool isSameState = currentStateName.Equals(
             previousBehaviorState, StringComparison.OrdinalIgnoreCase);
 
         if (isSameState && RetainedStates.Contains(currentStateName))
         {
-            // State retained — stay silent, no new intervention
+            // State retained - stay silent, no new intervention
             result.Type = InterventionType.None;
             return result;
         }
 
         // ── Observable Behavioural Interventions ──
         // All dialogue is fetched from the DB (no hardcoded strings).
-
-        var diagCategory = diagnosticResult.Category.ToString();
-        var skill        = skillType.ToString();
-
-        if (behaviorState == BehaviorState.GamingTheSystem)
-        {
-            result.Type       = InterventionType.Rejection;
-            result.NpcDialogue = await FetchScaffoldingHintAsync(
-                BehaviorState.GamingTheSystem.ToString(), diagCategory, skill, currentHintTier);
-            return result;
-        }
-
-        // PostFailureDisengagement, WheelSpinning, LowProgressTrialAndError
         result.Type       = InterventionType.ScaffoldingHint;
         result.NpcDialogue = await FetchScaffoldingHintAsync(
-            behaviorState.ToString(), diagCategory, skill, currentHintTier);
+            behaviorState.ToString(),
+            diagnosticResult.Category.ToString(),
+            skillType.ToString(),
+            currentHintTier);
 
         return result;
     }
@@ -130,8 +136,8 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
     ///
     /// Lookup cascade (first match wins):
     ///   1. Behavioral state + exact skill + exact tier   (most specific)
-    ///   2. Behavioral state + any skill + any tier ≤ requested
-    ///   3. Diagnostic category + any skill + any tier ≤ requested (error-based fallback)
+    ///   2. Behavioral state + any skill + any tier <=requested
+    ///   3. Diagnostic category + any skill + any tier <=requested (error fallback)
     ///   4. GenericFallback catch-all
     ///
     /// Behavioral hints are stored with diagnostic_category = behaviorState.ToString()

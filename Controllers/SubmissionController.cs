@@ -194,6 +194,11 @@ public class SubmissionController : ControllerBase
         submission.InterventionType = interventionResult.Type.ToString();
         player.ExperiencePoints += interventionResult.XpAwarded;
 
+        // A rejected submission (GamingTheSystem) is never treated as correct -
+        // the student must engage genuinely with the problem to earn completion.
+        bool effectivelyCorrect = diagnosticResult.IsCorrect
+            && interventionResult.Type != InterventionType.Rejection;
+
         if (interventionResult.LevelUnlocked)
         {
             int nextLevel = GetDungeonLevelForSkill(skillTypeEnum) + 1;
@@ -203,13 +208,13 @@ public class SubmissionController : ControllerBase
 
         _db.CodeSubmissions.Add(submission);
         session.SubmissionCount++;
-        if (diagnosticResult.IsCorrect) session.IsCompleted = true;
+        if (effectivelyCorrect) session.IsCompleted = true;
 
         await _db.SaveChangesAsync();
 
         // ── Achievement Detection ──
         var newAchievements = new List<string>();
-        if (diagnosticResult.IsCorrect)
+        if (effectivelyCorrect)
         {
             var existingNames = ParseAchievementNames(player.Achievements);
 
@@ -280,7 +285,7 @@ public class SubmissionController : ControllerBase
         return Ok(new SubmissionResponse
         {
             SubmissionId = submission.Id,
-            IsCorrect = diagnosticResult.IsCorrect,
+            IsCorrect = effectivelyCorrect,
             DiagnosticCategory = diagnosticResult.Category.ToString(),
             DiagnosticMessage = diagnosticResult.Message,
             CompilerDiagnostics = diagnosticResult.CompilerDiagnostics,
