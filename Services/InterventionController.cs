@@ -38,23 +38,10 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
     {
         var result = new InterventionResult();
 
-        // ── Phase 1 Baseline Guard ──
-        // First submission establishes the baseline - never trigger dialogue.
-        if (isFirstSubmission)
-        {
-            if (bktResult.IsMastered && diagnosticResult.IsCorrect)
-                result.XpAwarded = XpCorrectAnswer + XpMasteryBonus;
-            else if (diagnosticResult.IsCorrect)
-                result.XpAwarded = XpCorrectAnswer;
-            result.Type = InterventionType.None;
-            return result;
-        }
-
-        // ── GamingTheSystem — Highest Priority ──
-        // Must be checked BEFORE correctness rewards.
-        // A pasted correct answer is NOT a genuine solution; the student must
-        // engage with the problem deliberately. Each paste is an independent
-        // action so we do NOT apply the retention gate here.
+        // ── GamingTheSystem — Absolute Highest Priority ──
+        // Must be checked BEFORE any correctness rewards or baseline guards.
+        // A pasted answer or instant submission is NOT a genuine solution.
+        // Even on the very first submission, gaming is intercepted.
         if (behaviorState == BehaviorState.GamingTheSystem)
         {
             result.Type       = InterventionType.Rejection;
@@ -64,6 +51,18 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
                 skillType.ToString(),
                 currentHintTier);
             // XpAwarded intentionally left at 0 - rejected submission earns nothing
+            return result;
+        }
+
+        // ── Phase 1 Baseline Guard ──
+        // First submission establishes the baseline - never trigger regular dialogue.
+        if (isFirstSubmission)
+        {
+            if (bktResult.IsMastered && diagnosticResult.IsCorrect)
+                result.XpAwarded = XpCorrectAnswer + XpMasteryBonus;
+            else if (diagnosticResult.IsCorrect)
+                result.XpAwarded = XpCorrectAnswer;
+            result.Type = InterventionType.None;
             return result;
         }
 
