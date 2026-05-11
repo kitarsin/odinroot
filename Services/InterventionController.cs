@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using ODIN.Api.Data;
 using ODIN.Api.Models.DTOs;
 using ODIN.Api.Models.Enums;
