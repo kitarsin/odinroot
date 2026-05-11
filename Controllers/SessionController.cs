@@ -17,12 +17,9 @@ public class SessionController : ControllerBase
     {
         var player = await _db.Players.FindAsync(request.UserId);
         if (player == null) return NotFound(new { error = "Player not found" });
-        // Allow the next dungeon level up — Level 0 is the diagnostic pretest,
-        // so CurrentLevel=0 must still grant access to Level 1.
-        // The game map already gates physical enemy encounters; this just
-        // prevents API-level skipping (e.g. jumping from Level 1 → Level 3).
-        if (request.DungeonLevel > player.CurrentLevel + 1)
-            return BadRequest(new { error = "Dungeon level not yet unlocked", currentLevel = player.CurrentLevel });
+        // Note: no level-gate check here — the game map already controls which
+        // enemies are physically reachable. Enforcing CurrentLevel here would
+        // permanently block players whose DB value lags behind their in-game progress.
 
         var session = new GameSession
         {
