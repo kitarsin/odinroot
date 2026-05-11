@@ -62,7 +62,7 @@ public class SubmissionController : ControllerBase
         {
             diagnosticResult.IsCorrect = false;
             diagnosticResult.Category  = DiagnosticCategory.UnchangedStarterCode;
-            diagnosticResult.Message   = "Your code matches the provided starter template. Write your own solution — submitting the starting code unchanged won't count.";
+            diagnosticResult.Message   = "Your code matches the provided starter template. Write your own solution - submitting the starting code unchanged won't count.";
         }
 
         // ── Stage 2: Execution-Based Output Validation ──
@@ -104,7 +104,7 @@ public class SubmissionController : ControllerBase
                         // Pattern not found — student removed the required data
                         diagnosticResult.IsCorrect = false;
                         diagnosticResult.Category  = DiagnosticCategory.GenericLogicError;
-                        diagnosticResult.Message   = "Make sure your code uses the provided data — do not remove or hardcode the given values.";
+                        diagnosticResult.Message   = "Make sure your code uses the provided data - do not remove or hardcode the given values.";
                         break;
                     }
                     var altOutput = await _codeExecution.ExecuteAsync(altCode);

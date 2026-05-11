@@ -19,11 +19,16 @@ namespace ODIN.Api.Services;
 /// </summary>
 public class HbdaService : IHbdaService
 {
-    private const double GamingIntervalMax      = 2.0;   // SI < 2s
-    private const double GamingTaskElapsedMin   = 15.0;  // task elapsed < 15s
+    private const double GamingIntervalMax        = 2.0;   // SI < 2s
+    private const double GamingTaskElapsedMin     = 15.0;  // task elapsed < 15s
     private const double DisengagementIntervalMin = 120.0; // SI >= 120s
-    private const double LowProgressIntervalMax = 6.0;   // SI < 6s
-    private const double ThinkingIntervalMin    = 15.0;  // SI > 15s
+    private const double LowProgressIntervalMax   = 6.0;   // SI < 6s
+    private const double ThinkingIntervalMin      = 15.0;  // SI > 15s
+
+    /// Max edit distance still considered "symbol cycling" for LPTAE.
+    /// Above this threshold the student is making substantive edits even if
+    /// the normalised code structure looks the same.
+    private const int LowProgressMaxEditDistance = 25;
 
     private const double WeightGaming               = 20.0;
     private const double WeightDisengagement        = 15.0;
@@ -102,11 +107,17 @@ public class HbdaService : IHbdaService
     }
 
     /// LowProgressTrialAndError: SI < 6s AND only numeric/operator swaps (no structural change)
+    /// EditDistance must be small (<= 25) — large edits indicate genuine rework, not symbol cycling.
     private static bool IsLowProgressTrialAndError(CodeSubmission c, CodeSubmission? prev)
     {
         if (c.SubmissionIntervalSeconds >= LowProgressIntervalMax) return false;
         if (c.IsCorrect) return false;
         if (prev == null) return false;
+
+        // Substantive rewrites disqualify LPTAE even if normalised structure matches.
+        // e.g. moving code to a different line changes edit distance significantly
+        // but can produce the same normalised form.
+        if (c.EditDistance > LowProgressMaxEditDistance) return false;
 
         // Source changed (ED > 0) but only in numbers/operators
         return c.EditDistance > 0
