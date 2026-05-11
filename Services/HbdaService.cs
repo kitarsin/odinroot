@@ -35,15 +35,16 @@ public class HbdaService : IHbdaService
     public HbdaResult Classify(
         CodeSubmission current,
         CodeSubmission? previous,
-        List<CodeSubmission> sessionHistory)
+        List<CodeSubmission> sessionHistory,
+        double inactivityDuration)
     {
         if (IsGamingTheSystem(current))
             return Result(BehaviorState.GamingTheSystem, WeightGaming,
                 $"Gaming: SI={current.SubmissionIntervalSeconds:F1}s, paste={current.PasteDetected}, task={current.TaskElapsedSeconds:F0}s");
 
-        if (IsPostFailureDisengagement(current, previous))
+        if (IsPostFailureDisengagement(current, previous, inactivityDuration))
             return Result(BehaviorState.PostFailureDisengagement, WeightDisengagement,
-                $"PostFailureDisengagement: SI={current.SubmissionIntervalSeconds:F1}s after error");
+                $"PostFailureDisengagement: inactivity={inactivityDuration:F1}s after error");
 
         if (IsWheelSpinning(current, previous, sessionHistory))
             return Result(BehaviorState.WheelSpinning, WeightWheelSpinning,
@@ -75,10 +76,10 @@ public class HbdaService : IHbdaService
         || c.PasteDetected
         || c.TaskElapsedSeconds < GamingTaskElapsedMin;
 
-    /// PostFailureDisengagement: student went silent (>= 120s) after an error and is still wrong
-    private static bool IsPostFailureDisengagement(CodeSubmission c, CodeSubmission? prev)
+    /// PostFailureDisengagement: keyboard idle >= 120s immediately after an error
+    private static bool IsPostFailureDisengagement(CodeSubmission c, CodeSubmission? prev, double inactivityDuration)
     {
-        if (c.SubmissionIntervalSeconds < DisengagementIntervalMin) return false;
+        if (inactivityDuration < DisengagementIntervalMin) return false;
         if (c.IsCorrect) return false;
         // Previous submission must also have been an error
         return prev != null && !prev.IsCorrect;

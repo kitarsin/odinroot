@@ -10,7 +10,8 @@ public interface IHbdaService
     HbdaResult Classify(
         CodeSubmission currentSubmission,
         CodeSubmission? previousSubmission,
-        List<CodeSubmission> sessionHistory);
+        List<CodeSubmission> sessionHistory,
+        double inactivityDuration);   // client-measured idle time (seconds)
 }
 
 public class HbdaResult
@@ -69,9 +70,9 @@ public interface IInterventionController
         BehaviorState behaviorState,
         DiagnosticResult diagnosticResult,
         BktResult bktResult,
-        AffectiveResult affectiveResult,
         SkillType skillType,
-        int currentHintTier);
+        int currentHintTier,
+        bool isFirstSubmission);   // suppresses all dialogue on Phase 1 baseline
 }
 
 public class InterventionResult

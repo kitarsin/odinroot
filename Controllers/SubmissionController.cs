@@ -129,11 +129,16 @@ public class SubmissionController : ControllerBase
             ? EditDistanceCalculator.Compute(previousSubmission.SourceCode, request.SourceCode)
             : request.SourceCode.Length;
 
+        // Use client-measured timing for HBDA accuracy.
+        // If the client value is missing/zero, fall back to server-computed delta.
         double submissionInterval = previousSubmission != null
-            ? (DateTime.UtcNow - previousSubmission.SubmittedAt).TotalSeconds
+            ? (request.KeystrokeData.TimeSinceLastSubmit > 0
+                ? request.KeystrokeData.TimeSinceLastSubmit
+                : (DateTime.UtcNow - previousSubmission.SubmittedAt).TotalSeconds)
             : request.KeystrokeData.TotalTimeSeconds;
 
-        double taskElapsed = (DateTime.UtcNow - session.StartedAt).TotalSeconds;
+        double inactivityDuration = request.KeystrokeData.InactivityDuration;
+        double taskElapsed        = (DateTime.UtcNow - session.StartedAt).TotalSeconds;
 
         // ── Create submission record ──
         var submission = new CodeSubmission
@@ -164,16 +169,16 @@ public class SubmissionController : ControllerBase
             .OrderBy(s => s.SubmittedAt)
             .ToListAsync();
 
-        var hbdaResult = _hbda.Classify(submission, previousSubmission, sessionHistory);
+        var hbdaResult = _hbda.Classify(submission, previousSubmission, sessionHistory, inactivityDuration);
         submission.BehaviorState = hbdaResult.State.ToString();
 
         // ── BKT Update ──
         var bktResult = await _bkt.UpdateMasteryAsync(
             request.PlayerId, request.SkillType, diagnosticResult.IsCorrect);
 
-        // ── Affective State Evaluation ──
+        // ── Affective State — logging only (admin/research visibility, never shown to students) ──
         var affectiveResult = _affectiveState.Evaluate(hbdaResult, bktResult, player.HelplessnessScore);
-        player.HelplessnessScore = affectiveResult.UpdatedHelplessnessScore;
+        player.HelplessnessScore = affectiveResult.UpdatedHelplessnessScore;  // persisted for admin
         player.TotalSubmissions++;
         player.UpdatedAt = DateTime.UtcNow;
 
@@ -181,8 +186,9 @@ public class SubmissionController : ControllerBase
         int currentHintTier = sessionHistory.Count(s => s.InterventionType == "ScaffoldingHint");
 
         var interventionResult = await _interventionController.DetermineInterventionAsync(
-            hbdaResult.State, diagnosticResult, bktResult, affectiveResult,
-            skillTypeEnum, currentHintTier);
+            hbdaResult.State, diagnosticResult, bktResult,
+            skillTypeEnum, currentHintTier,
+            request.KeystrokeData.IsFirstSubmission);
 
         submission.InterventionType = interventionResult.Type.ToString();
         player.ExperiencePoints += interventionResult.XpAwarded;
