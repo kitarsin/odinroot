@@ -1,4 +1,4 @@
--- ODIN Puzzle Seed Data — Pretest Style
+-- ODIN Puzzle Seed Data - Pretest Style
 -- Run in Supabase SQL Editor.
 --
 -- Each puzzle provides data declarations as starter code.
@@ -22,7 +22,7 @@ INSERT INTO puzzles (id, title, description, dungeon_level, order_index, skill_t
 
 ('a0000001-0000-0000-0000-000000000000',
  'The Silent Phantom',
- 'I am the echo of the machine — but no sound comes out! I must transmit the first greeting across the network. Write the output statement that gives me a voice: Hello, ODIN!',
+ 'I am the echo of the machine - but no sound comes out! I must transmit the first greeting across the network. Write the output statement that gives me a voice: Hello, ODIN!',
  0, 1, 'ArrayInitialization',
  '// Print the message "Hello, ODIN!" to the console.',
  'Hello, ODIN!',
@@ -30,7 +30,7 @@ INSERT INTO puzzles (id, title, description, dungeon_level, order_index, skill_t
 
 ('a0000002-0000-0000-0000-000000000000',
  'The Heavy Allocator',
- 'A critical system ID has been issued — four hundred and four! But this data drifts in the void with nowhere to land. Declare an integer variable to anchor it, then print its value.',
+ 'A critical system ID has been issued - four hundred and four! But this data drifts in the void with nowhere to land. Declare an integer variable to anchor it, then print its value.',
  0, 2, 'ArrayInitialization',
  '// Declare an integer variable called systemID with the value 404.
 // Then print its value.',
@@ -40,7 +40,7 @@ INSERT INTO puzzles (id, title, description, dungeon_level, order_index, skill_t
 
 ('a0000003-0000-0000-0000-000000000000',
  'The Modulo Slasher',
- 'My blade slices the power cycles into groups — but what remains after the split?! The remainder is the key. Use the correct operator on the provided values and print what is left over.',
+ 'My blade slices the power cycles into groups - but what remains after the split?! The remainder is the key. Use the correct operator on the provided values and print what is left over.',
  0, 3, 'ArrayOperations',
  'int a = 10;
 int b = 3;
@@ -51,7 +51,7 @@ int b = 3;
 
 ('a0000004-0000-0000-0000-000000000000',
  'The Panicking Gatekeeper',
- 'The access level has been set — the threshold is five! Write the decision logic: if the access level is 5 or higher, print "Access granted". Otherwise, print "Access denied".',
+ 'The access level has been set - the threshold is five! Write the decision logic: if the access level is 5 or higher, print "Access granted". Otherwise, print "Access denied".',
  0, 4, 'ArrayAccess',
  'int accessLevel = 5;
 // Print "Access granted" if accessLevel is 5 or higher.
@@ -62,7 +62,7 @@ int b = 3;
 
 ('a0000005-0000-0000-0000-000000000000',
  'The Memory Mercenary',
- 'Three security keys must be loaded into contiguous memory — 101, 202, and 303! Declare the array, assign each value to its correct index, and print every key on its own line.',
+ 'Three security keys must be loaded into contiguous memory - 101, 202, and 303! Declare the array, assign each value to its correct index, and print every key on its own line.',
  0, 5, 'ArrayInitialization',
  '// Declare an integer array called securityKeys with exactly 3 elements.
 // Assign 101 to index 0, 202 to index 1, and 303 to index 2.
@@ -75,7 +75,7 @@ int b = 3;
 
 ('a0000011-0000-0000-0000-000000000000',
  'The Null-Blade Vanguard',
- 'The archive must be catalogued — a rack of exactly five entries! Declare the array, place the identification code 99 at index 2, then print that value to confirm it was stored.',
+ 'The archive must be catalogued - a rack of exactly five entries! Declare the array, place the identification code 99 at index 2, then print that value to confirm it was stored.',
  1, 1, 'ArrayInitialization',
  '// Declare an integer array called bookIDs with exactly 5 elements.
 // Assign 99 to index 2.
@@ -95,7 +95,7 @@ int b = 3;
 
 ('a0000013-0000-0000-0000-000000000000',
  'The Hardcoded Herald',
- 'The shipment has arrived with its cargo! Every item must be logged — one per line. Do not assume the count; let the array tell you its own length. Print every element in sequence.',
+ 'The shipment has arrived with its cargo! Every item must be logged - one per line. Do not assume the count; let the array tell you its own length. Print every element in sequence.',
  1, 3, 'ArrayIteration',
  'int[] shipment = { 3, 7, 2, 8 };
 // Print each element of the shipment array on its own line.',
@@ -105,7 +105,7 @@ int b = 3;
 
 ('a0000014-0000-0000-0000-000000000000',
  'The Type-Clashing Alchemist',
- 'A Dewey classification code arrived as text — "512" — but the catalog rack only accepts integers! Convert the string to its numeric form, load it into the first slot, and print the stored value.',
+ 'A Dewey classification code arrived as text - "512" - but the catalog rack only accepts integers! Convert the string to its numeric form, load it into the first slot, and print the stored value.',
  1, 4, 'ArrayOperations',
  'int[] deweyCodes = new int[5];
 string codeText = "512";
@@ -117,7 +117,7 @@ string codeText = "512";
 
 ('a0000015-0000-0000-0000-000000000000',
  'The Off-By-One Oracle',
- 'The page counts for every volume in the collection are recorded. Sum them all and print the grand total — every page must be counted, no matter how many entries the array holds.',
+ 'The page counts for every volume in the collection are recorded. Sum them all and print the grand total - every page must be counted, no matter how many entries the array holds.',
  1, 5, 'ArrayIteration',
  'int[] pages = { 142, 97, 208, 315, 53 };
 // Compute the sum of all elements in the pages array.
@@ -130,7 +130,7 @@ string codeText = "512";
 
 ('a0000021-0000-0000-0000-000000000000',
  'The Infinite Striker',
- 'Five customers stand in the queue! Use a while loop: print the current customer count, then decrement it. Keep going until the queue is cleared — do not let it run forever!',
+ 'Five customers stand in the queue! Use a while loop: print the current customer count, then decrement it. Keep going until the queue is cleared - do not let it run forever!',
  2, 1, 'ArrayIteration',
  'int customers = 5;
 // Use a while loop: print customers, then decrement it.
@@ -141,7 +141,7 @@ string codeText = "512";
 
 ('a0000022-0000-0000-0000-000000000000',
  'The Absolute Severer',
- 'Eight orders are queued for processing — but order four is void! Write a loop from 1 to 8. When the counter hits 4, use continue to skip it. Print all other order numbers.',
+ 'Eight orders are queued for processing - but order four is void! Write a loop from 1 to 8. When the counter hits 4, use continue to skip it. Print all other order numbers.',
  2, 2, 'ArrayIteration',
  '// Use a for loop from 1 to 8 (inclusive).
 // Skip the value 4 using continue.
@@ -151,7 +151,7 @@ string codeText = "512";
 
 ('a0000023-0000-0000-0000-000000000000',
  'The Blind Behemoth',
- 'I execute first and check later — that is the way of this kitchen! Use a do-while loop: print the current order number, then increment it. Continue while the order does not exceed the maximum.',
+ 'I execute first and check later - that is the way of this kitchen! Use a do-while loop: print the current order number, then increment it. Continue while the order does not exceed the maximum.',
  2, 3, 'ArrayIteration',
  'int order = 1;
 int maxOrders = 3;
@@ -174,7 +174,7 @@ int maxOrders = 3;
 
 ('a0000025-0000-0000-0000-000000000000',
  'The Nested Beast',
- 'Every table has seats, and every seat must be logged! Write nested loops — outer for tables, inner for seats. For each combination print: Table X Seat Y (using the actual index values of X and Y).',
+ 'Every table has seats, and every seat must be logged! Write nested loops - outer for tables, inner for seats. For each combination print: Table X Seat Y (using the actual index values of X and Y).',
  2, 5, 'ArrayIteration',
  'int tables = 3;
 int seatsPerTable = 2;
@@ -188,7 +188,7 @@ int seatsPerTable = 2;
 
 ('a0000031-0000-0000-0000-000000000000',
  'The Matrix Carver',
- 'The battlefield must be forged — an eight-by-four grid of integers! Declare the two-dimensional array and print the total number of elements it can hold.',
+ 'The battlefield must be forged - an eight-by-four grid of integers! Declare the two-dimensional array and print the total number of elements it can hold.',
  3, 1, 'MultidimensionalArrays',
  '// Declare an 8-row, 4-column integer 2D array called poolTable.
 // Print the total number of elements it contains.',
@@ -198,7 +198,7 @@ int seatsPerTable = 2;
 
 ('a0000032-0000-0000-0000-000000000000',
  'The Coordinate Planter',
- 'My staff must be planted at a precise coordinate — row 2, column 1 (zero-based)! Assign the value 7 to that position in the pool table and print the stored value to confirm the strike landed.',
+ 'My staff must be planted at a precise coordinate - row 2, column 1 (zero-based)! Assign the value 7 to that position in the pool table and print the stored value to confirm the strike landed.',
  3, 2, 'MultidimensionalArrays',
  'int[,] poolTable = new int[8, 4];
 // Assign the value 7 to the element at row 2, column 1.
@@ -209,7 +209,7 @@ int seatsPerTable = 2;
 
 ('a0000033-0000-0000-0000-000000000000',
  'The Span Measurer',
- 'The arena has five rows and eight columns — but my instruments must confirm only the horizontal span! Do not use the total element count. Use GetLength to extract just the column dimension and print it.',
+ 'The arena has five rows and eight columns - but my instruments must confirm only the horizontal span! Do not use the total element count. Use GetLength to extract just the column dimension and print it.',
  3, 3, 'MultidimensionalArrays',
  'int[,] grid = new int[5, 8];
 // Print the number of columns in the grid using GetLength.',
@@ -230,7 +230,7 @@ int seatsPerTable = 2;
 
 ('a0000035-0000-0000-0000-000000000000',
  'The Out-of-Bounds Slugger',
- 'The matrix has six rows and nine columns — each dimension must be named precisely! Use GetLength to extract the row count from dimension 0 and the column count from dimension 1. Print each on its own line.',
+ 'The matrix has six rows and nine columns - each dimension must be named precisely! Use GetLength to extract the row count from dimension 0 and the column count from dimension 1. Print each on its own line.',
  3, 5, 'MultidimensionalArrays',
  'int[,] matrix = new int[6, 9];
 // Print the number of rows using GetLength(0).
@@ -244,7 +244,7 @@ int seatsPerTable = 2;
 
 ('a0000099-0000-0000-0000-000000000000',
  'The Corrupted Core',
- 'My memory is shattered into jagged fragments! Three rows, each a different size — 3, 5, and 2! Allocate each row of the jagged array using the sizes array as your guide. Then print the length of each row to prove they were forged correctly.',
+ 'My memory is shattered into jagged fragments! Three rows, each a different size - 3, 5, and 2! Allocate each row of the jagged array using the sizes array as your guide. Then print the length of each row to prove they were forged correctly.',
  3, 6, 'JaggedArrays',
  'int[][] grid = new int[3][];
 int[] sizes = { 3, 5, 2 };

@@ -268,6 +268,8 @@ public class SubmissionController : ControllerBase
 
         await _db.SaveChangesAsync();
 
+        _logger.LogInformation("DiagnosticMessage before response: '{Message}'", diagnosticResult.Message);
+
         return Ok(new SubmissionResponse
         {
             SubmissionId = submission.Id,
