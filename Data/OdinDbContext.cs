@@ -83,6 +83,8 @@ public class OdinDbContext : DbContext
             e.Property(s => s.EditDistance).HasColumnName("edit_distance");
             e.Property(s => s.SubmissionIntervalSeconds).HasColumnName("submission_interval_seconds");
             e.Property(s => s.HintUsageCount).HasColumnName("hint_usage_count");
+            e.Property(s => s.PasteDetected).HasColumnName("paste_detected");
+            e.Property(s => s.TaskElapsedSeconds).HasColumnName("task_elapsed_seconds");
             e.Property(s => s.DiagnosticCategory).HasColumnName("diagnostic_category");
             e.Property(s => s.DiagnosticMessage).HasColumnName("diagnostic_message");
             e.Property(s => s.BehaviorState).HasColumnName("behavior_state");

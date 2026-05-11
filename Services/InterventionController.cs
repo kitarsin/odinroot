@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using ODIN.Api.Data;
 using ODIN.Api.Models.DTOs;
 using ODIN.Api.Models.Enums;
 using ODIN.Api.Services.Interfaces;
@@ -8,96 +6,87 @@ namespace ODIN.Api.Services;
 
 public class InterventionControllerService : IInterventionController
 {
-    private readonly OdinDbContext _db;
-
-    private const int XpCorrectAnswer = 100;
-    private const int XpProductiveFailure = 25;
+    private const int XpCorrectAnswer  = 100;
     private const int XpActiveThinking = 50;
-    private const int XpMasteryBonus = 500;
+    private const int XpMasteryBonus   = 500;
 
-    public InterventionControllerService(OdinDbContext db) { _db = db; }
+    // Psychologist-authored dialogue for each behavioral state.
+    private static NpcDialogueDto Dialogue(string text) =>
+        new() { NpcName = "Odin", DialogueText = text };
 
-    public async Task<InterventionResult> DetermineInterventionAsync(
+    public Task<InterventionResult> DetermineInterventionAsync(
         BehaviorState behaviorState, DiagnosticResult diagnosticResult,
         BktResult bktResult, AffectiveResult affectiveResult,
         SkillType skillType, int currentHintTier)
     {
         var result = new InterventionResult();
 
-        if (behaviorState == BehaviorState.GamingTheSystem)
-        {
-            result.Type = InterventionType.Rejection;
-            result.NpcDialogue = await FetchHintAsync("None", "ArrayInitialization", 0, "Rushing");
-            return result;
-        }
-
+        // Mastery + correct → unlock next level
         if (bktResult.IsMastered && diagnosticResult.IsCorrect)
         {
             result.Type = InterventionType.LevelUnlock;
             result.LevelUnlocked = true;
             result.XpAwarded = XpCorrectAnswer + XpMasteryBonus;
-            return result;
+            return Task.FromResult(result);
         }
 
+        // Correct (not yet mastered)
         if (diagnosticResult.IsCorrect)
         {
             result.Type = InterventionType.None;
             result.XpAwarded = XpCorrectAnswer;
-            return result;
+            return Task.FromResult(result);
         }
 
-        if (behaviorState == BehaviorState.ProductiveFailure)
+        // All remaining cases are incorrect submissions — apply behavioral intervention.
+        switch (behaviorState)
         {
-            result.Type = InterventionType.Reward;
-            result.NpcDialogue = await FetchHintAsync("None", "ArrayInitialization", 0, "persistence");
-            result.XpAwarded = XpProductiveFailure;
-            return result;
+            case BehaviorState.GamingTheSystem:
+                result.Type = InterventionType.Rejection;
+                result.NpcDialogue = Dialogue(
+                    "I noticed you skipped ahead quickly. Before submitting, try walking through " +
+                    "your code line by line—does each part do what you think it does?");
+                break;
+
+            case BehaviorState.PostFailureDisengagement:
+                result.Type = InterventionType.ScaffoldingHint;
+                result.NpcDialogue = Dialogue(
+                    "Looks like that last error stopped you cold. It happens to the best of us. " +
+                    "Take a breath and look at the line where it broke—what does the message actually say?");
+                break;
+
+            case BehaviorState.WheelSpinning:
+                result.Type = InterventionType.ScaffoldingHint;
+                result.NpcDialogue = Dialogue(
+                    "You've submitted the same code a few times—I think something in the structure " +
+                    "itself needs to change. Look at the overall shape of your solution, not just the flagged line.");
+                break;
+
+            case BehaviorState.LowProgressTrialAndError:
+                result.Type = InterventionType.ScaffoldingHint;
+                result.NpcDialogue = Dialogue(
+                    "Slow down—you're swapping symbols fast, but the logic hasn't shifted. " +
+                    "What is the line supposed to do? Try explaining it out loud.");
+                break;
+
+            case BehaviorState.HintWithheld:
+                // Student is making real progress; encourage without giving a hint.
+                result.Type = InterventionType.Reward;
+                result.NpcDialogue = Dialogue(
+                    "You've been stuck on this for a bit. You're making progress—each error is a clue. " +
+                    "What changed between your last two tries?");
+                break;
+
+            case BehaviorState.ActiveThinking:
+                result.Type = InterventionType.Reward;
+                result.XpAwarded = XpActiveThinking;
+                break;
+
+            default:
+                result.Type = InterventionType.None;
+                break;
         }
 
-        if (behaviorState == BehaviorState.ActiveThinking)
-        {
-            result.Type = InterventionType.Reward;
-            result.XpAwarded = XpActiveThinking;
-            return result;
-        }
-
-        if (affectiveResult.HelplessnessTriggered ||
-            behaviorState == BehaviorState.WheelSpinning ||
-            behaviorState == BehaviorState.Tinkering)
-        {
-            int hintTier = Math.Min(currentHintTier + 1, 3);
-            string diagCat = diagnosticResult.Category.ToString();
-            string skill = skillType.ToString();
-
-            var hint = await _db.ScaffoldingHints
-                .Where(h => h.IsActive && h.DiagnosticCategory == diagCat && h.SkillType == skill && h.Tier == hintTier)
-                .FirstOrDefaultAsync()
-                ?? await _db.ScaffoldingHints
-                    .Where(h => h.IsActive && h.DiagnosticCategory == diagCat && h.Tier <= hintTier)
-                    .OrderByDescending(h => h.Tier).FirstOrDefaultAsync()
-                ?? await _db.ScaffoldingHints
-                    .Where(h => h.IsActive && h.DiagnosticCategory == "GenericLogicError")
-                    .FirstOrDefaultAsync();
-
-            result.Type = InterventionType.ScaffoldingHint;
-            if (hint != null)
-                result.NpcDialogue = new NpcDialogueDto
-                {
-                    NpcName = hint.NpcName, DialogueText = hint.DialogueText,
-                    TechnicalHint = hint.TechnicalHint, HintTier = hint.Tier
-                };
-            return result;
-        }
-
-        return result;
-    }
-
-    private async Task<NpcDialogueDto?> FetchHintAsync(string diagCat, string skill, int tier, string contains)
-    {
-        var hint = await _db.ScaffoldingHints
-            .Where(h => h.IsActive && h.Tier == tier && h.DialogueText.Contains(contains))
-            .FirstOrDefaultAsync();
-        if (hint == null) return new NpcDialogueDto { NpcName = "Odin", DialogueText = "Take a moment to think, warrior.", HintTier = 0 };
-        return new NpcDialogueDto { NpcName = hint.NpcName, DialogueText = hint.DialogueText, TechnicalHint = hint.TechnicalHint, HintTier = hint.Tier };
+        return Task.FromResult(result);
     }
 }

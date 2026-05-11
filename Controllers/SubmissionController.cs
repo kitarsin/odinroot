@@ -133,6 +133,8 @@ public class SubmissionController : ControllerBase
             ? (DateTime.UtcNow - previousSubmission.SubmittedAt).TotalSeconds
             : request.KeystrokeData.TotalTimeSeconds;
 
+        double taskElapsed = (DateTime.UtcNow - session.StartedAt).TotalSeconds;
+
         // ── Create submission record ──
         var submission = new CodeSubmission
         {
@@ -149,6 +151,8 @@ public class SubmissionController : ControllerBase
             EditDistance = editDistance,
             SubmissionIntervalSeconds = submissionInterval,
             HintUsageCount = request.HintUsageCount,
+            PasteDetected = request.KeystrokeData.PasteDetected,
+            TaskElapsedSeconds = taskElapsed,
             IsCorrect = diagnosticResult.IsCorrect,
             DiagnosticCategory = diagnosticResult.Category.ToString(),
             DiagnosticMessage = diagnosticResult.Message

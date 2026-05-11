@@ -39,4 +39,6 @@ public class KeystrokePayload
     public double InitialLatencyMs { get; set; }
     public double TotalTimeSeconds { get; set; }
     public List<double[]>? RawEvents { get; set; }
+    /// <summary>True when the client detected a Ctrl+V paste immediately before submit.</summary>
+    public bool PasteDetected { get; set; }
 }

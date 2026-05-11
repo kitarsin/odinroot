@@ -41,9 +41,8 @@ public class AffectiveStateService : IAffectiveStateService
             bktResult.ProbabilityMastery < BktUncertaintyLimit;
 
         // ── Productive State Detection ──
-        // Student is productive if they're in Active Thinking or Productive Failure
         bool isProductiveState =
-            hbdaResult.State == BehaviorState.ProductiveFailure ||
+            hbdaResult.State == BehaviorState.HintWithheld ||
             hbdaResult.State == BehaviorState.ActiveThinking;
 
         return new AffectiveResult

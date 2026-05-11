@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using ODIN.Api.Models.Domain;
 using ODIN.Api.Models.Enums;
 using ODIN.Api.Services.Interfaces;
@@ -6,203 +7,153 @@ namespace ODIN.Api.Services;
 
 /// <summary>
 /// Heuristic Behavior Detection Algorithm (HBDA) — Stage 1 of the Sequential Pipeline.
-/// Classifies student submissions into five behavioral states using thresholds
-/// from Table 8: Criteria of Behaviors in Stealth Assessment.
+/// Thresholds defined by the project psychologist.
 ///
-/// Helplessness Score weights function as a manual GAM:
-///   +20 for Gaming the System (rapid guessing)
-///   +15 for Wheel-Spinning (stuck on same error)
-///   +10 for Tinkering (mindless modification)
-///   -10 for Active Thinking (cognitive planning)
-///   -15 for Productive Failure (strategic variation)
+/// Priority order (first match wins):
+///   1. GamingTheSystem          — SI &lt; 2s OR paste-detected OR task &lt; 15s
+///   2. PostFailureDisengagement — SI &gt;= 120s AND previous was error
+///   3. WheelSpinning            — &gt;= 3 consecutive same errors, no structural change
+///   4. LowProgressTrialAndError — SI &lt; 6s AND only numeric/operator swaps
+///   5. HintWithheld             — SI &gt; 15s AND new/different error
+///   6. ActiveThinking           — SI &gt; 15s AND correct/progressive AND &gt;= 2 consecutive progressive
 /// </summary>
 public class HbdaService : IHbdaService
 {
-    // ═══════════════════════════════════════════════════════════
-    // Configurable Thresholds (to be calibrated with psychologists)
-    // ═══════════════════════════════════════════════════════════
+    private const double GamingIntervalMax      = 2.0;   // SI < 2s
+    private const double GamingTaskElapsedMin   = 15.0;  // task elapsed < 15s
+    private const double DisengagementIntervalMin = 120.0; // SI >= 120s
+    private const double LowProgressIntervalMax = 6.0;   // SI < 6s
+    private const double ThinkingIntervalMin    = 15.0;  // SI > 15s
 
-    // Gaming the System
-    private const double GamingSubmissionIntervalMax = 5.0;    // SI <= 5s
-    private const int    GamingHintUsageMin = 3;               // HU >= 3
-    private const int    GamingEditDistanceMax = 0;            // ED ~= 0
-
-    // Tinkering
-    private const double TinkeringSubmissionIntervalMax = 10.0; // SI <= 10s
-    private const int    TinkeringEditDistanceMax = 2;          // ED <= 2 chars
-
-    // Wheel-Spinning
-    private const double WheelSpinningTotalTimeMin = 120.0;     // TT >= 120s
-    private const int    WheelSpinningAttemptsMin = 10;         // Attempts >= 10
-    // EC = Same Logic Error (checked via error consistency)
-
-    // Productive Failure
-    private const int    ProductiveFailureAttemptsMin = 3;      // Attempts >= 3
-    private const int    ProductiveFailureEditDistanceMin = 10; // ED >= 10 chars
-    // EV = Error type changes (syntax -> logic)
-
-    // Active Thinking
-    private const double ActiveThinkingInitialLatencyMin = 30_000; // IL >= 30s (in ms)
-    private const double ActiveThinkingFlightTimeMax = 200;        // KF <= 200ms
-
-    // Helplessness Score Weights (GAM-style)
-    private const double WeightGaming = 20.0;
-    private const double WeightWheelSpinning = 15.0;
-    private const double WeightTinkering = 10.0;
-    private const double WeightActiveThinking = -10.0;
-    private const double WeightProductiveFailure = -15.0;
+    private const double WeightGaming               = 20.0;
+    private const double WeightDisengagement        = 15.0;
+    private const double WeightWheelSpinning        = 15.0;
+    private const double WeightLowProgress          = 10.0;
+    private const double WeightHintWithheld         = -5.0;
+    private const double WeightActiveThinking       = -10.0;
 
     public HbdaResult Classify(
         CodeSubmission current,
         CodeSubmission? previous,
         List<CodeSubmission> sessionHistory)
     {
-        // Priority order: Gaming > Tinkering > Wheel-Spinning > Productive Failure > Active Thinking
-        // Gaming is checked first as it should be immediately rejected.
-
         if (IsGamingTheSystem(current))
-        {
-            return new HbdaResult
-            {
-                State = BehaviorState.GamingTheSystem,
-                HelplessnessScoreDelta = WeightGaming,
-                Reasoning = $"Gaming detected: SI={current.SubmissionIntervalSeconds:F1}s, " +
-                           $"HU={current.HintUsageCount}, ED={current.EditDistance}"
-            };
-        }
+            return Result(BehaviorState.GamingTheSystem, WeightGaming,
+                $"Gaming: SI={current.SubmissionIntervalSeconds:F1}s, paste={current.PasteDetected}, task={current.TaskElapsedSeconds:F0}s");
 
-        if (IsTinkering(current))
-        {
-            return new HbdaResult
-            {
-                State = BehaviorState.Tinkering,
-                HelplessnessScoreDelta = WeightTinkering,
-                Reasoning = $"Tinkering detected: SI={current.SubmissionIntervalSeconds:F1}s, " +
-                           $"ED={current.EditDistance} chars"
-            };
-        }
+        if (IsPostFailureDisengagement(current, previous))
+            return Result(BehaviorState.PostFailureDisengagement, WeightDisengagement,
+                $"PostFailureDisengagement: SI={current.SubmissionIntervalSeconds:F1}s after error");
 
-        if (IsWheelSpinning(current, sessionHistory))
-        {
-            return new HbdaResult
-            {
-                State = BehaviorState.WheelSpinning,
-                HelplessnessScoreDelta = WeightWheelSpinning,
-                Reasoning = $"Wheel-Spinning detected: TT={current.TotalTimeSeconds:F0}s, " +
-                           $"Attempts={sessionHistory.Count}, same error repeated"
-            };
-        }
+        if (IsWheelSpinning(current, previous, sessionHistory))
+            return Result(BehaviorState.WheelSpinning, WeightWheelSpinning,
+                $"WheelSpinning: >=3 consecutive {current.DiagnosticCategory} errors, no structural change");
 
-        if (IsProductiveFailure(current, previous, sessionHistory))
-        {
-            return new HbdaResult
-            {
-                State = BehaviorState.ProductiveFailure,
-                HelplessnessScoreDelta = WeightProductiveFailure,
-                Reasoning = $"Productive Failure: ED={current.EditDistance} chars, " +
-                           $"error type changed from previous submission"
-            };
-        }
+        if (IsLowProgressTrialAndError(current, previous))
+            return Result(BehaviorState.LowProgressTrialAndError, WeightLowProgress,
+                $"LowProgressTrialAndError: SI={current.SubmissionIntervalSeconds:F1}s, only symbol swaps");
 
-        if (IsActiveThinking(current))
-        {
-            return new HbdaResult
-            {
-                State = BehaviorState.ActiveThinking,
-                HelplessnessScoreDelta = WeightActiveThinking,
-                Reasoning = $"Active Thinking: IL={current.InitialLatencyMs:F0}ms pause, " +
-                           $"KF={current.AverageFlightTimeMs:F0}ms burst typing"
-            };
-        }
+        if (IsHintWithheld(current, previous))
+            return Result(BehaviorState.HintWithheld, WeightHintWithheld,
+                $"HintWithheld: SI={current.SubmissionIntervalSeconds:F1}s, new error type");
 
-        // Default: classify as Tinkering with reduced weight if no clear pattern
-        return new HbdaResult
-        {
-            State = BehaviorState.Tinkering,
-            HelplessnessScoreDelta = WeightTinkering * 0.5,
-            Reasoning = "No clear behavioral pattern — defaulting to mild tinkering classification"
-        };
+        if (IsActiveThinking(current, previous, sessionHistory))
+            return Result(BehaviorState.ActiveThinking, WeightActiveThinking,
+                $"ActiveThinking: SI={current.SubmissionIntervalSeconds:F1}s, progressive/correct, >= 2 consecutive");
+
+        return Result(BehaviorState.LowProgressTrialAndError, WeightLowProgress * 0.5,
+            "No clear pattern — mild low-progress default");
     }
 
     // ═══════════════════════════════════════════════════════════
-    // Individual State Detectors
+    // Detectors
     // ═══════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Gaming: SI &lt;= 5s, HU &gt;= 3, ED ~= 0 (spamming compile, seeking answers)
-    /// </summary>
-    private static bool IsGamingTheSystem(CodeSubmission current)
-    {
-        bool rapidSubmission = current.SubmissionIntervalSeconds <= GamingSubmissionIntervalMax;
-        bool excessiveHints = current.HintUsageCount >= GamingHintUsageMin;
-        bool noAttemptToSolve = current.EditDistance <= GamingEditDistanceMax;
+    /// Gaming: SI < 2s OR paste detected OR total task time < 15s
+    private static bool IsGamingTheSystem(CodeSubmission c) =>
+        c.SubmissionIntervalSeconds < GamingIntervalMax
+        || c.PasteDetected
+        || c.TaskElapsedSeconds < GamingTaskElapsedMin;
 
-        // Either rapid + no changes, or excessive hint seeking
-        return (rapidSubmission && noAttemptToSolve) || (rapidSubmission && excessiveHints);
+    /// PostFailureDisengagement: student went silent (>= 120s) after an error and is still wrong
+    private static bool IsPostFailureDisengagement(CodeSubmission c, CodeSubmission? prev)
+    {
+        if (c.SubmissionIntervalSeconds < DisengagementIntervalMin) return false;
+        if (c.IsCorrect) return false;
+        // Previous submission must also have been an error
+        return prev != null && !prev.IsCorrect;
     }
 
-    /// <summary>
-    /// Tinkering: SI &lt;= 10s, ED &lt;= 2 chars, Result = Error (mindless modification)
-    /// </summary>
-    private static bool IsTinkering(CodeSubmission current)
+    /// WheelSpinning: >= 3 consecutive submissions share the same DiagnosticCategory AND no structural change
+    private static bool IsWheelSpinning(CodeSubmission c, CodeSubmission? prev, List<CodeSubmission> history)
     {
-        return current.SubmissionIntervalSeconds <= TinkeringSubmissionIntervalMax
-            && current.EditDistance <= TinkeringEditDistanceMax
-            && current.EditDistance > 0  // Distinguishes from Gaming (ED ~= 0)
-            && !current.IsCorrect;
+        if (prev == null || history.Count < 2) return false;
+        if (c.IsCorrect) return false;
+
+        // Last 2 in history + current must all have the same diagnostic category
+        var last2 = history.OrderByDescending(h => h.SubmittedAt).Take(2).ToList();
+        bool sameError = last2.All(h => h.DiagnosticCategory == c.DiagnosticCategory)
+                         && c.DiagnosticCategory != "None";
+        if (!sameError) return false;
+
+        // No structural change between current and previous
+        return NormalizeStructure(c.SourceCode) == NormalizeStructure(prev.SourceCode);
     }
 
-    /// <summary>
-    /// Wheel-Spinning: TT &gt;= 120s, Attempts &gt;= 10, same logic error repeated (no progress)
-    /// </summary>
-    private static bool IsWheelSpinning(CodeSubmission current, List<CodeSubmission> history)
+    /// LowProgressTrialAndError: SI < 6s AND only numeric/operator swaps (no structural change)
+    private static bool IsLowProgressTrialAndError(CodeSubmission c, CodeSubmission? prev)
     {
-        if (history.Count < WheelSpinningAttemptsMin) return false;
+        if (c.SubmissionIntervalSeconds >= LowProgressIntervalMax) return false;
+        if (c.IsCorrect) return false;
+        if (prev == null) return false;
 
-        // Check total accumulated time across session
-        double totalSessionTime = history.Sum(h => h.TotalTimeSeconds);
-        if (totalSessionTime < WheelSpinningTotalTimeMin) return false;
-
-        // Check error consistency: same diagnostic category in the last 3+ submissions
-        var recentErrors = history
-            .OrderByDescending(h => h.SubmittedAt)
-            .Take(3)
-            .Select(h => h.DiagnosticCategory)
-            .Distinct()
-            .ToList();
-
-        // If the last 3 submissions all have the same error type = stuck
-        return recentErrors.Count == 1 && recentErrors[0] != "None";
+        // Source changed (ED > 0) but only in numbers/operators
+        return c.EditDistance > 0
+               && NormalizeStructure(c.SourceCode) == NormalizeStructure(prev.SourceCode);
     }
 
-    /// <summary>
-    /// Productive Failure: Attempts &gt;= 3, error type changes (EV), ED &gt;= 10 chars (structural rewrite)
-    /// </summary>
-    private static bool IsProductiveFailure(
-        CodeSubmission current,
-        CodeSubmission? previous,
-        List<CodeSubmission> history)
+    /// HintWithheld: SI > 15s AND a new/different error (student is actively exploring)
+    private static bool IsHintWithheld(CodeSubmission c, CodeSubmission? prev)
     {
-        if (history.Count < ProductiveFailureAttemptsMin) return false;
-        if (current.EditDistance < ProductiveFailureEditDistanceMin) return false;
-
-        // Error variety: the error type must have changed from the previous submission
-        if (previous == null) return false;
-        bool errorChanged = current.DiagnosticCategory != previous.DiagnosticCategory;
-        bool notCorrect = !current.IsCorrect;
-
-        return errorChanged && notCorrect;
+        if (c.SubmissionIntervalSeconds <= ThinkingIntervalMin) return false;
+        if (c.IsCorrect) return false;
+        if (prev == null) return true; // First attempt after a long pause = benefit of the doubt
+        return c.DiagnosticCategory != prev.DiagnosticCategory;
     }
 
-    /// <summary>
-    /// Active Thinking: IL &gt;= 30s (pause for thought), KF &lt;= 200ms (burst typing),
-    /// Result = Success or Near-Success
-    /// </summary>
-    private static bool IsActiveThinking(CodeSubmission current)
+    /// ActiveThinking: SI > 15s AND (correct or progressive) AND >= 2 consecutive progressive
+    private static bool IsActiveThinking(CodeSubmission c, CodeSubmission? prev, List<CodeSubmission> history)
     {
-        bool longPause = current.InitialLatencyMs >= ActiveThinkingInitialLatencyMin;
-        bool burstTyping = current.AverageFlightTimeMs <= ActiveThinkingFlightTimeMax;
+        if (c.SubmissionIntervalSeconds <= ThinkingIntervalMin) return false;
 
-        return longPause && burstTyping;
+        bool currentProgressive = c.IsCorrect
+            || (prev != null && c.DiagnosticCategory != prev.DiagnosticCategory);
+        if (!currentProgressive) return false;
+
+        // Previous submission must also have been progressive
+        if (prev == null || history.Count < 2) return false;
+        var beforePrev = history.OrderByDescending(h => h.SubmittedAt).Skip(1).FirstOrDefault();
+        bool prevProgressive = prev.IsCorrect
+            || (beforePrev != null && prev.DiagnosticCategory != beforePrev.DiagnosticCategory);
+
+        return prevProgressive;
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // Helpers
+    // ═══════════════════════════════════════════════════════════
+
+    /// Normalize code so only numeric literals and operator symbols can vary.
+    /// Two codes with the same normalized form differ only in numbers/operators.
+    private static string NormalizeStructure(string code)
+    {
+        code = Regex.Replace(code, @"//[^\r\n]*", "", RegexOptions.Multiline);
+        code = Regex.Replace(code, @"/\*.*?\*/", "", RegexOptions.Singleline);
+        code = Regex.Replace(code, @"\b\d+(\.\d+)?\b", "NUM");
+        code = Regex.Replace(code, @"[+\-*/%=<>!&|^~?]", "OP");
+        return Regex.Replace(code, @"\s+", " ").Trim();
+    }
+
+    private static HbdaResult Result(BehaviorState state, double delta, string reason) =>
+        new() { State = state, HelplessnessScoreDelta = delta, Reasoning = reason };
 }

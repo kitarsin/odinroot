@@ -32,6 +32,8 @@ public class CodeSubmission
     public int EditDistance { get; set; }
     public double SubmissionIntervalSeconds { get; set; }
     public int HintUsageCount { get; set; }
+    public bool PasteDetected { get; set; }
+    public double TaskElapsedSeconds { get; set; }
 
     // AST diagnosis
     public string DiagnosticCategory { get; set; } = "None";

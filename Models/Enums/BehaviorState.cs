@@ -1,38 +1,44 @@
 namespace ODIN.Api.Models.Enums;
 
 /// <summary>
-/// The five behavioral states classified by the Heuristic Behavior Detection Algorithm (HBDA).
-/// Reference: Table 8 — Criteria of Behaviors in Stealth Assessment
+/// The behavioral states classified by the Heuristic Behavior Detection Algorithm (HBDA).
+/// Thresholds defined by the project psychologist.
 /// </summary>
 public enum BehaviorState
 {
     /// <summary>
-    /// Mindless modification without understanding.
-    /// Detected when: SI &lt;= 10s, ED &lt;= 2 chars, Result = Error
-    /// </summary>
-    Tinkering,
-
-    /// <summary>
-    /// Exploiting feedback mechanisms to pass without learning.
-    /// Detected when: SI &lt;= 5s, HU &gt;= 3, ED ~= 0
+    /// Exploiting feedback loops to pass without engaging.
+    /// Detected when: SI &lt; 2s OR paste-then-submit OR task elapsed &lt; 15s
     /// </summary>
     GamingTheSystem,
 
     /// <summary>
-    /// Learned Helplessness / Lack of Mastery. The primary intervention target.
-    /// Detected when: TT &gt;= 120s, Attempts &gt;= 10, EC = Same Logic Error
+    /// Student stopped engaging after hitting an error (learned helplessness onset).
+    /// Detected when: SI &gt;= 120s AND previous submission was also an error
+    /// </summary>
+    PostFailureDisengagement,
+
+    /// <summary>
+    /// Repeatedly submitting identical code with the same error — no structural change.
+    /// Detected when: &gt;= 3 consecutive identical compiler errors AND no structural change
     /// </summary>
     WheelSpinning,
 
     /// <summary>
-    /// Struggling but actively learning/refining. Healthy behavior.
-    /// Detected when: Attempts &gt;= 3, EV = error changes, ED &gt;= 10 chars
+    /// Fast symbol-swapping without understanding the underlying logic.
+    /// Detected when: SI &lt; 6s AND only numeric/operator swaps, no structural change
     /// </summary>
-    ProductiveFailure,
+    LowProgressTrialAndError,
 
     /// <summary>
-    /// Cognitive planning followed by execution. Optimal state.
-    /// Detected when: IL &gt;= 30s, KF &lt;= 200ms, Result = Success/Near-Success
+    /// Student is making real progress; withhold hints to let them discover the solution.
+    /// Detected when: SI &gt; 15s AND a new/different error from the previous submission
+    /// </summary>
+    HintWithheld,
+
+    /// <summary>
+    /// Deliberate, well-paced problem solving. Optimal learning state.
+    /// Detected when: SI &gt; 15s AND (correct or progressive) AND &gt;= 2 consecutive progressive submits
     /// </summary>
     ActiveThinking
 }
