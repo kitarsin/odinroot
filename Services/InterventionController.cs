@@ -12,19 +12,33 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
     private const int XpActiveThinking = 50;
     private const int XpMasteryBonus   = 500;
 
+    /// <summary>
+    /// States marked "retained" by the psychologist's transition model.
+    /// If the student is already in one of these states, do NOT re-intervene —
+    /// only a genuine state *transition* warrants a new intervention.
+    /// </summary>
+    private static readonly HashSet<string> RetainedStates = new(StringComparer.OrdinalIgnoreCase)
+    {
+        nameof(BehaviorState.ActiveThinking),
+        nameof(BehaviorState.WheelSpinning),
+        nameof(BehaviorState.GamingTheSystem),
+        "Normal",   // default HBDA fallback
+        "",         // no prior state (first submission)
+    };
+
     public async Task<InterventionResult> DetermineInterventionAsync(
         BehaviorState behaviorState,
         DiagnosticResult diagnosticResult,
         BktResult bktResult,
         SkillType skillType,
         int currentHintTier,
-        bool isFirstSubmission)
+        bool isFirstSubmission,
+        string previousBehaviorState)
     {
         var result = new InterventionResult();
 
         // ── Phase 1 Baseline Guard ──
-        // The first submission in a session establishes the baseline.
-        // No intervention dialogue is ever triggered, regardless of correctness.
+        // First submission establishes the baseline — never trigger dialogue.
         if (isFirstSubmission)
         {
             if (bktResult.IsMastered && diagnosticResult.IsCorrect)
@@ -68,8 +82,28 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
             return result;
         }
 
-        // ── Observable Behavioral Interventions ──
-        // All states below trigger strictly based on observable behaviour thresholds.
+        // ── State-Transition Gate (psychologist §5.2) ──
+        // "Retained" labels mean the system keeps the previous state when
+        // the same behaviour is detected again — no re-intervention fires.
+        // An intervention only triggers on a meaningful state *change*.
+        //
+        // Examples:
+        //   WS → WS  (retained): silent — student is still wheel-spinning, no new signal
+        //   AT → PD  (transition): fire PD hint — student moved from productive to stuck
+        //   PD → TE  (transition): fire TE hint — student is now rapid-cycling
+        //   GS → GS  (retained): silent — already rejected once, no need to repeat
+        string currentStateName = behaviorState.ToString();
+        bool isSameState = currentStateName.Equals(
+            previousBehaviorState, StringComparison.OrdinalIgnoreCase);
+
+        if (isSameState && RetainedStates.Contains(currentStateName))
+        {
+            // State retained — stay silent, no new intervention
+            result.Type = InterventionType.None;
+            return result;
+        }
+
+        // ── Observable Behavioural Interventions ──
         // All dialogue is fetched from the DB (no hardcoded strings).
 
         var diagCategory = diagnosticResult.Category.ToString();
@@ -84,7 +118,6 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
         }
 
         // PostFailureDisengagement, WheelSpinning, LowProgressTrialAndError
-        // → all route to the DB-backed tiered scaffolding system
         result.Type       = InterventionType.ScaffoldingHint;
         result.NpcDialogue = await FetchScaffoldingHintAsync(
             behaviorState.ToString(), diagCategory, skill, currentHintTier);
@@ -109,8 +142,8 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
     {
         int tier = Math.Min(currentHintTier + 1, 3);
 
-        // 1. Exact: behavior + skill + tier
         var hint =
+            // 1. Exact: behavior + skill + tier
             await db.ScaffoldingHints
                 .Where(h => h.IsActive
                     && h.DiagnosticCategory == behaviorState
@@ -118,7 +151,7 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
                     && h.Tier               == tier)
                 .FirstOrDefaultAsync()
 
-            // 2. Behavior + any skill/tier (catches the "All" skill rows)
+            // 2. Behavior + any skill/tier
             ?? await db.ScaffoldingHints
                 .Where(h => h.IsActive
                     && h.DiagnosticCategory == behaviorState
@@ -126,7 +159,7 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
                 .OrderByDescending(h => h.Tier)
                 .FirstOrDefaultAsync()
 
-            // 3. Error-category hint (the original error-specific path)
+            // 3. Error-category fallback
             ?? await db.ScaffoldingHints
                 .Where(h => h.IsActive
                     && h.DiagnosticCategory == diagCategory
@@ -143,10 +176,10 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
 
         return new NpcDialogueDto
         {
-            NpcName      = hint.NpcName,
-            DialogueText = hint.DialogueText,
+            NpcName       = hint.NpcName,
+            DialogueText  = hint.DialogueText,
             TechnicalHint = hint.TechnicalHint,
-            HintTier     = hint.Tier
+            HintTier      = hint.Tier
         };
     }
 }

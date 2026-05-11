@@ -72,7 +72,8 @@ public interface IInterventionController
         BktResult bktResult,
         SkillType skillType,
         int currentHintTier,
-        bool isFirstSubmission);   // suppresses all dialogue on Phase 1 baseline
+        bool isFirstSubmission,
+        string previousBehaviorState);  // empty string on first submission
 }
 
 public class InterventionResult

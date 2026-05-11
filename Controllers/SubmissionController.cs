@@ -188,7 +188,8 @@ public class SubmissionController : ControllerBase
         var interventionResult = await _interventionController.DetermineInterventionAsync(
             hbdaResult.State, diagnosticResult, bktResult,
             skillTypeEnum, currentHintTier,
-            request.KeystrokeData.IsFirstSubmission);
+            request.KeystrokeData.IsFirstSubmission,
+            previousSubmission?.BehaviorState ?? "");
 
         submission.InterventionType = interventionResult.Type.ToString();
         player.ExperiencePoints += interventionResult.XpAwarded;
