@@ -98,6 +98,8 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
 
             default:
                 result.Type = InterventionType.None;
+                result.NpcDialogue = Dialogue(
+                    "Not quite — check what value your code actually prints versus what the problem asks for.");
                 break;
         }
 
