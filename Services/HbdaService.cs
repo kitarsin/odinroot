@@ -144,7 +144,7 @@ public class HbdaService : IHbdaService
         bool actualPasteDetected = c.PasteDetected && !isPasteOfPriorWork;
 
         // High Confidence (1.0)
-        if (actualPasteDetected || c.TaskElapsedSeconds < GamingTaskElapsedMin || c.SubmissionIntervalSeconds < GamingIntervalMax)
+        if (actualPasteDetected && (c.TaskElapsedSeconds < GamingTaskElapsedMin || c.SubmissionIntervalSeconds < GamingIntervalMax))
         {
             return (true, 1.0, $"High Confidence Gaming: paste={actualPasteDetected}, task={c.TaskElapsedSeconds:F0}s, SI={c.SubmissionIntervalSeconds:F1}s");
         }

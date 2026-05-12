@@ -66,6 +66,20 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
             return result;
         }
 
+        // ── Warm-Up Guard ──
+        // Let the first few genuine coding submissions establish a pattern without
+        // NPC dialogue. GamingTheSystem has already returned above, so paste bypasses
+        // are still intercepted immediately.
+        if (bktResult.IsWarmUpPhase)
+        {
+            if (bktResult.IsMastered && diagnosticResult.IsCorrect)
+                result.XpAwarded = XpCorrectAnswer + XpMasteryBonus;
+            else if (diagnosticResult.IsCorrect)
+                result.XpAwarded = XpCorrectAnswer;
+            result.Type = InterventionType.None;
+            return result;
+        }
+
         // ── Mastery + Correct -> Level Unlock ──
         if (bktResult.IsMastered && diagnosticResult.IsCorrect)
         {
