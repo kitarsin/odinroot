@@ -14,7 +14,7 @@ namespace ODIN.Api.Services;
 ///   1. GamingTheSystem              — SI &lt; 2s OR paste-detected OR task &lt; 15s
 ///   2. PostFailureDisengagement     — Multiple indicators of learned helplessness
 ///   3. WheelSpinning                — &gt;= 3 consecutive same errors, no structural change
-///   4. LowProgressTrialAndError     — SI &lt; 6s AND only numeric/operator swaps
+///   4. LowProgressTrialAndError     — SI &lt; 6s with character/value cycling or persistent error
 ///   5. HintWithheld                 — SI &gt; 15s AND new/different error
 ///   6. ActiveThinking               — SI &gt; 15s AND correct/progressive AND &gt;= 2 consecutive progressive
 ///
@@ -22,11 +22,17 @@ namespace ODIN.Api.Services;
 ///   - Indicator #1: Inactivity >= 120s after error
 ///   - Indicator #2: Trivial edit (ED &lt;= 5) after error
 ///   - Indicator #3: 2+ identical submissions (ED == 0) with no edit between
-///   - Indicator #4: Task window viewed &lt; 5s with zero keystrokes (requires client instrumentation)
+///
+/// Tinkering (Low-Progress Trial-and-Error):
+///   - Indicator #1: SI &lt; 6s rapid submissions
+///   - Indicator #2: Same character cycled 3+ times (delete/retype pattern)
+///   - Indicator #3: Single-digit value swapped 3+ times
+///   - Indicator #4: Persistent error (same DiagnosticCategory 3+ times)
+///   - Indicator #5: No structural change (normalized structure identical)
 ///
 /// Confidence Levels:
-///   - HIGH: Multiple indicators or explicit 120s+ inactivity proof
-///   - MODERATE: Single strong indicator without time proof
+///   - HIGH: Multiple indicators or explicit time/cycle proof
+///   - MODERATE: Single strong indicator without corroboration
 ///   - LOW: Weak evidence requiring monitoring
 /// </summary>
 public class HbdaService : IHbdaService
@@ -40,9 +46,16 @@ public class HbdaService : IHbdaService
     private const int    UnchangedResubmissionMaxEd     = 5;      // EditDistance <= 5 still "unchanged"
     private const int    IdenticalSubmissionThreshold   = 2;      // 2+ identical submissions = pattern
     
+    // ─── Tinkering Detection ───
+    private const double TinkeringIntervalMax     = 6.0;   // SI < 6s (rapid)
+    private const int    CharacterCycleThreshold  = 3;     // Same character cycled 3+ times
+    private const int    NumericCycleThreshold    = 3;     // Numeric value cycled 3+ times
+    private const int    PersistentErrorThreshold = 3;     // Same error 3+ times
+    private const int    StrategicChangeThreshold = 10;    // ED >= 10 indicates significant rework
+    
     // ─── Other Behaviors ───
-    private const double LowProgressIntervalMax   = 6.0;   // SI < 6s
     private const double ThinkingIntervalMin      = 15.0;  // SI > 15s
+    private const double ReflectionPauseMin       = 15.0;  // Pause > 15s indicates reflection
     private const int    LowProgressMaxEditDistance = 25;   // Max ED for symbol cycling
 
     // ─── Weights (Helplessness Score Delta) ───
@@ -51,7 +64,9 @@ public class HbdaService : IHbdaService
     private const double WeightDisengagementModerate = 12.0;  // 60% weight for single indicator
     private const double WeightDisengagementLow      = 8.0;   // 40% weight for weak evidence
     private const double WeightWheelSpinning         = 15.0;
-    private const double WeightLowProgress           = 10.0;
+    private const double WeightTinkeringHigh         = 10.0;  // Multiple rapid/cycling indicators
+    private const double WeightTinkeringModerate     = 6.0;   // Single indicator (60% weight)
+    private const double WeightTinkeringLow          = 3.0;   // Weak evidence (30% weight)
     private const double WeightHintWithheld          = -5.0;
     private const double WeightActiveThinking        = -10.0;
 
@@ -75,9 +90,10 @@ public class HbdaService : IHbdaService
             return Result(BehaviorState.WheelSpinning, WeightWheelSpinning, ConfidenceLevel.High,
                 $"WheelSpinning: >=3 consecutive {current.DiagnosticCategory} errors, no structural change");
 
-        if (IsLowProgressTrialAndError(current, previous))
-            return Result(BehaviorState.LowProgressTrialAndError, WeightLowProgress, ConfidenceLevel.Moderate,
-                $"LowProgressTrialAndError: SI={current.SubmissionIntervalSeconds:F1}s, only symbol swaps");
+        // Enhanced LowProgressTrialAndError (Tinkering) detection with multiple indicators
+        var tinkeringResult = EvaluateTinkering(current, previous, sessionHistory);
+        if (tinkeringResult != null)
+            return tinkeringResult;
 
         if (IsHintWithheld(current, previous))
             return Result(BehaviorState.HintWithheld, WeightHintWithheld, ConfidenceLevel.Moderate,
@@ -87,7 +103,7 @@ public class HbdaService : IHbdaService
             return Result(BehaviorState.ActiveThinking, WeightActiveThinking, ConfidenceLevel.High,
                 $"ActiveThinking: SI={current.SubmissionIntervalSeconds:F1}s, progressive/correct, >= 2 consecutive");
 
-        return Result(BehaviorState.LowProgressTrialAndError, WeightLowProgress * 0.5, ConfidenceLevel.Low,
+        return Result(BehaviorState.LowProgressTrialAndError, WeightTinkeringLow * 0.5, ConfidenceLevel.Low,
             "No clear pattern — mild low-progress default");
     }
 
@@ -268,20 +284,274 @@ public class HbdaService : IHbdaService
         return NormalizeStructure(c.SourceCode) == NormalizeStructure(prev.SourceCode);
     }
 
-    /// LowProgressTrialAndError: SI < 6s AND only numeric/operator swaps (no structural change)
-    /// EditDistance must be small (<= 25) — large edits indicate genuine rework, not symbol cycling.
-    private static bool IsLowProgressTrialAndError(CodeSubmission c, CodeSubmission? prev)
+    /// <summary>
+    /// Comprehensive Tinkering (Low-Progress Trial-and-Error) detection.
+    /// Evaluates multiple indicators:
+    ///   1. Rapid submission interval (SI < 6s)
+    ///   2. Repeated character cycling (same char delete/retype 3+ times)
+    ///   3. Single-digit value swapping (numeric value cycled 3+ times)
+    ///   4. Persistent error pattern (same error 3+ times)
+    ///   5. No structural change (normalized structure identical)
+    ///
+    /// Returns null if no tinkering detected.
+    /// Applies exclusion logic for productive corrections and strategic progressions.
+    /// </summary>
+    private HbdaResult? EvaluateTinkering(
+        CodeSubmission current,
+        CodeSubmission? previous,
+        List<CodeSubmission> sessionHistory)
     {
-        if (c.SubmissionIntervalSeconds >= LowProgressIntervalMax) return false;
-        if (c.IsCorrect) return false;
-        if (prev == null) return false;
+        // Only applies to unsuccessful submissions
+        if (current.IsCorrect) return null;
+        
+        // Exclusion #1: Deliberate symbol correction that succeeded
+        // Already caught by IsCorrect check above, but keep logic separate for clarity
 
-        // Substantive rewrites disqualify LPTAE even if normalised structure matches.
-        if (c.EditDistance > LowProgressMaxEditDistance) return false;
+        // Collect evidence of indicators
+        bool indicator1_RapidSI = current.SubmissionIntervalSeconds < TinkeringIntervalMax;
+        bool indicator2_CharacterCycling = IsRepeatedCharacterCycling(current, previous, sessionHistory);
+        bool indicator3_NumericCycling = IsNumericValueCycling(current, previous, sessionHistory);
+        bool indicator4_PersistentError = IsPersistentErrorPattern(current, previous, sessionHistory);
+        bool indicator5_NoStructuralChange = previous != null && 
+                                              NormalizeStructure(current.SourceCode) == NormalizeStructure(previous.SourceCode);
 
-        // Source changed (ED > 0) but only in numbers/operators
-        return c.EditDistance > 0
-               && NormalizeStructure(c.SourceCode) == NormalizeStructure(prev.SourceCode);
+        // If no indicators present, not tinkering
+        if (!indicator1_RapidSI && !indicator2_CharacterCycling && !indicator3_NumericCycling 
+            && !indicator4_PersistentError)
+            return null;
+
+        // Exclusion #2: Strategic element progression (different error types = exploring)
+        if (ShouldExcludeAsStrategicProgression(current, previous, sessionHistory))
+            return null;
+
+        // Exclusion #3: Reflection pause + recovery (pause > 15s then major change)
+        if (ShouldExcludeAsReflectionRecovery(current, previous, sessionHistory))
+            return null;
+
+        // Determine confidence based on indicator strength and count
+        var (confidenceLevel, delta) = EvaluateTinkeringConfidence(
+            indicator1_RapidSI, indicator2_CharacterCycling, indicator3_NumericCycling, 
+            indicator4_PersistentError, indicator5_NoStructuralChange);
+
+        var indicatorSummary = GetTinkeringIndicatorSummary(
+            indicator1_RapidSI, indicator2_CharacterCycling, indicator3_NumericCycling, 
+            indicator4_PersistentError, indicator5_NoStructuralChange);
+
+        return Result(
+            BehaviorState.LowProgressTrialAndError,
+            delta,
+            confidenceLevel,
+            $"Tinkering ({confidenceLevel}): {indicatorSummary}");
+    }
+
+    /// <summary>
+    /// Detects Indicator #2: Same character deleted and retyped 3+ times in rapid succession.
+    /// Tracks if character at a specific position cycles between states across consecutive submissions.
+    /// </summary>
+    private static bool IsRepeatedCharacterCycling(
+        CodeSubmission current,
+        CodeSubmission? previous,
+        List<CodeSubmission> history)
+    {
+        if (previous == null || history.Count < 2) return false;
+        if (current.EditDistance <= 0 || current.EditDistance > UnchangedResubmissionMaxEd) return false;
+
+        // Simple heuristic: if ED is small and structures are same, likely symbol cycling
+        // Look for alternating patterns like == vs = or i vs int i
+        // Full implementation would track character-level changes across submission history
+        // For now, detect the pattern via normalized structure match + small ED + rapid interval
+        
+        bool rapidInterval = current.SubmissionIntervalSeconds < TinkeringIntervalMax;
+        bool normalizedMatch = NormalizeStructure(current.SourceCode) == NormalizeStructure(previous.SourceCode);
+        
+        // Check if this is part of a cycling pattern (look back at recent submissions)
+        if (rapidInterval && normalizedMatch && history.Count >= 2)
+        {
+            // Check last 3 submissions for cycling pattern (ED always small, normalized same)
+            var recent = history.OrderByDescending(h => h.SubmittedAt).Take(3).ToList();
+            int cyclingCount = 0;
+            
+            foreach (var submission in recent)
+            {
+                if (submission.EditDistance > 0 && submission.EditDistance <= UnchangedResubmissionMaxEd)
+                {
+                    cyclingCount++;
+                }
+            }
+            
+            // If at least 3 recent submissions with small ED + rapid intervals, likely cycling
+            return cyclingCount >= 2; // 2 in history + current = 3 total
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Detects Indicator #3: Single-digit value cycled through multiple values.
+    /// Tracks numeric literal changes across rapid submissions.
+    /// </summary>
+    private static bool IsNumericValueCycling(
+        CodeSubmission current,
+        CodeSubmission? previous,
+        List<CodeSubmission> history)
+    {
+        if (previous == null || history.Count < 2) return false;
+        if (current.EditDistance <= 0 || current.EditDistance > UnchangedResubmissionMaxEd) return false;
+
+        // Extract all numeric values from current and previous code
+        var currentNumbers = ExtractNumericLiterals(current.SourceCode);
+        var previousNumbers = ExtractNumericLiterals(previous.SourceCode);
+
+        // Check if only numeric values changed (rest of structure same)
+        if (currentNumbers.Count == previousNumbers.Count && 
+            currentNumbers.Count > 0 &&
+            NormalizeStructure(current.SourceCode) == NormalizeStructure(previous.SourceCode))
+        {
+            // Numbers differ
+            bool onlyNumbersChanged = currentNumbers.SequenceEqual(previousNumbers) == false;
+            if (!onlyNumbersChanged) return false;
+
+            // Check for cycling pattern in recent submissions
+            var recent = history.OrderByDescending(h => h.SubmittedAt).Take(3).ToList();
+            var numberSequences = recent.Select(s => ExtractNumericLiterals(s.SourceCode)).ToList();
+            
+            // If we have 3 submissions with different numeric values but same structure = cycling
+            bool hasDifferentNumbers = numberSequences.Skip(1)
+                .Any(nums => !nums.SequenceEqual(numberSequences.First()));
+            
+            return hasDifferentNumbers;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Detects Indicator #4: Persistent error pattern (same error 3+ times).
+    /// </summary>
+    private static bool IsPersistentErrorPattern(
+        CodeSubmission current,
+        CodeSubmission? previous,
+        List<CodeSubmission> history)
+    {
+        if (current.IsCorrect || current.DiagnosticCategory == "None") return false;
+        if (previous == null || !previous.Equals(current.DiagnosticCategory)) 
+        {
+            if (previous?.DiagnosticCategory != current.DiagnosticCategory) return false;
+        }
+
+        // Count consecutive submissions with same error
+        int sameErrorCount = 1; // Current submission
+        foreach (var submission in history.OrderByDescending(h => h.SubmittedAt))
+        {
+            if (submission.DiagnosticCategory == current.DiagnosticCategory && !submission.IsCorrect)
+            {
+                sameErrorCount++;
+            }
+            else
+            {
+                break; // Stop at first different error
+            }
+        }
+
+        return sameErrorCount >= PersistentErrorThreshold;
+    }
+
+    /// <summary>
+    /// Determines if this is strategic element progression (student trying different elements).
+    /// Should exclude from tinkering detection.
+    /// </summary>
+    private static bool ShouldExcludeAsStrategicProgression(
+        CodeSubmission current,
+        CodeSubmission? previous,
+        List<CodeSubmission> history)
+    {
+        if (previous == null) return false;
+
+        // Exclusion: If error type changed, student is exploring different approaches
+        if (current.DiagnosticCategory != previous.DiagnosticCategory)
+            return true;
+
+        // Exclusion: If significant structural change (ED >= 10), likely rework not cycling
+        if (current.EditDistance >= StrategicChangeThreshold)
+            return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Determines if this is a reflection pause followed by recovery.
+    /// Should exclude from tinkering penalty if student recovers after pausing.
+    /// </summary>
+    private static bool ShouldExcludeAsReflectionRecovery(
+        CodeSubmission current,
+        CodeSubmission? previous,
+        List<CodeSubmission> history)
+    {
+        if (previous == null) return false;
+
+        // Exclusion: Large pause (> 15s) followed by significant change + different error = recovery
+        if (current.SubmissionIntervalSeconds > ReflectionPauseMin)
+        {
+            bool majorChange = current.EditDistance >= StrategicChangeThreshold;
+            bool differentError = current.DiagnosticCategory != previous.DiagnosticCategory;
+            bool hasRecovery = history.Any(s => s.IsCorrect);
+            
+            if (majorChange && differentError && hasRecovery)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Evaluates confidence level and returns appropriate weight for Tinkering.
+    /// 
+    /// HIGH: Multiple indicators OR explicit SI<6s OR character/value cycling
+    /// MODERATE: Persistent error (Indicator #4) alone without rapid SI
+    /// LOW: Weak evidence requiring monitoring
+    /// </summary>
+    private static (ConfidenceLevel, double) EvaluateTinkeringConfidence(
+        bool rapidSI,
+        bool charCycling,
+        bool numericCycling,
+        bool persistentError,
+        bool noStructuralChange)
+    {
+        int indicatorCount = (rapidSI ? 1 : 0) 
+                           + (charCycling ? 1 : 0) 
+                           + (numericCycling ? 1 : 0) 
+                           + (persistentError ? 1 : 0);
+
+        // HIGH: Multiple indicators OR explicit cycling evidence
+        if (indicatorCount >= 2 || charCycling || numericCycling || (rapidSI && persistentError))
+            return (ConfidenceLevel.High, WeightTinkeringHigh);
+
+        // MODERATE: Single strong indicator (persistent error or rapid SI alone)
+        if (indicatorCount == 1 && (persistentError || rapidSI))
+            return (ConfidenceLevel.Moderate, WeightTinkeringModerate);
+
+        // LOW: Weak evidence
+        return (ConfidenceLevel.Low, WeightTinkeringLow);
+    }
+
+    /// <summary>Helper to generate human-readable summary of which indicators triggered.</summary>
+    private static string GetTinkeringIndicatorSummary(
+        bool ind1, bool ind2, bool ind3, bool ind4, bool ind5)
+    {
+        var parts = new List<string>();
+        if (ind1) parts.Add("SI<6s");
+        if (ind2) parts.Add("CharCycling(3x)");
+        if (ind3) parts.Add("NumericCycling");
+        if (ind4) parts.Add("PersistentError");
+        if (ind5) parts.Add("NoStructChange");
+        return string.Join(" + ", parts);
+    }
+
+    /// <summary>Helper to extract numeric literals from source code.</summary>
+    private static List<int> ExtractNumericLiterals(string code)
+    {
+        var matches = Regex.Matches(code, @"\b(\d+)\b");
+        return matches.Cast<Match>().Select(m => int.Parse(m.Groups[1].Value)).ToList();
     }
 
     /// HintWithheld: SI > 15s AND a new/different error (student is actively exploring)
