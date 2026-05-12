@@ -82,16 +82,19 @@ public class SubmissionController : ControllerBase
         //   • Code wasn't flagged as unchanged starter (nothing to execute meaningfully)
         //   • No Roslyn compile errors (broken code can't run)
         //   • Puzzle has expected output recorded in the DB
-        if (diagnosticResult.IsCorrect
+        if (!diagnosticResult.CompilerDiagnostics.Any()
             && puzzle?.ExpectedOutput is { Length: > 0 } expectedOut)
         {
             actualOutput = await _codeExecution.ExecuteAsync(request.SourceCode);
 
             if (actualOutput == null)
             {
-                diagnosticResult.IsCorrect = false;
-                diagnosticResult.Category  = DiagnosticCategory.GenericLogicError;
-                diagnosticResult.Message   = "Your code could not be executed. Check for infinite loops, missing output, or unsupported operations.";
+                if (diagnosticResult.IsCorrect)
+                {
+                    diagnosticResult.IsCorrect = false;
+                    diagnosticResult.Category  = DiagnosticCategory.GenericLogicError;
+                    diagnosticResult.Message   = "Your code could not be executed. Check for infinite loops, missing output, or unsupported operations.";
+                }
             }
             else if (_codeExecution.Normalize(actualOutput) != _codeExecution.Normalize(expectedOut))
             {
@@ -99,7 +102,7 @@ public class SubmissionController : ControllerBase
                 diagnosticResult.Category  = DiagnosticCategory.GenericLogicError;
                 diagnosticResult.Message   = string.IsNullOrWhiteSpace(actualOutput)
                     ? "Your code produced no output. Make sure you have a Console.WriteLine with the correct value."
-                    : "Your output does not match the expected result. Review your logic.";
+                    : $"Your output ('{actualOutput.Trim()}') does not match the expected result. Review your logic.";
             }
             else if (puzzle.TestCases is { Length: > 2 })
             {
