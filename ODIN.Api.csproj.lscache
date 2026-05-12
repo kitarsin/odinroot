@@ -75,6 +75,7 @@ Models/DTOs/
  SubmissionResponse.cs
 Models/Enums/
  BehaviorState.cs
+ ConfidenceLevel.cs
  DiagnosticCategory.cs
  InterventionType.cs
  SkillType.cs

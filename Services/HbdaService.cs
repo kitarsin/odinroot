@@ -7,35 +7,54 @@ namespace ODIN.Api.Services;
 
 /// <summary>
 /// Heuristic Behavior Detection Algorithm (HBDA) — Stage 1 of the Sequential Pipeline.
-/// Thresholds defined by the project psychologist.
+/// Classifies student submissions into behavioral states using thresholds
+/// defined by the project psychologist.
 ///
 /// Priority order (first match wins):
-///   1. GamingTheSystem          — SI &lt; 2s OR paste-detected OR task &lt; 15s
-///   2. PostFailureDisengagement — SI &gt;= 120s AND previous was error
-///   3. WheelSpinning            — &gt;= 3 consecutive same errors, no structural change
-///   4. LowProgressTrialAndError — SI &lt; 6s AND only numeric/operator swaps
-///   5. HintWithheld             — SI &gt; 15s AND new/different error
-///   6. ActiveThinking           — SI &gt; 15s AND correct/progressive AND &gt;= 2 consecutive progressive
+///   1. GamingTheSystem              — SI &lt; 2s OR paste-detected OR task &lt; 15s
+///   2. PostFailureDisengagement     — Multiple indicators of learned helplessness
+///   3. WheelSpinning                — &gt;= 3 consecutive same errors, no structural change
+///   4. LowProgressTrialAndError     — SI &lt; 6s AND only numeric/operator swaps
+///   5. HintWithheld                 — SI &gt; 15s AND new/different error
+///   6. ActiveThinking               — SI &gt; 15s AND correct/progressive AND &gt;= 2 consecutive progressive
+///
+/// Learned Helplessness Detection:
+///   - Indicator #1: Inactivity >= 120s after error
+///   - Indicator #2: Trivial edit (ED &lt;= 5) after error
+///   - Indicator #3: 2+ identical submissions (ED == 0) with no edit between
+///   - Indicator #4: Task window viewed &lt; 5s with zero keystrokes (requires client instrumentation)
+///
+/// Confidence Levels:
+///   - HIGH: Multiple indicators or explicit 120s+ inactivity proof
+///   - MODERATE: Single strong indicator without time proof
+///   - LOW: Weak evidence requiring monitoring
 /// </summary>
 public class HbdaService : IHbdaService
 {
+    // ─── Gaming Detection ───
     private const double GamingIntervalMax        = 2.0;   // SI < 2s
     private const double GamingTaskElapsedMin     = 15.0;  // task elapsed < 15s
-    private const double DisengagementIntervalMin = 120.0; // SI >= 120s
+    
+    // ─── Disengagement Detection (Learned Helplessness) ───
+    private const double DisengagementIntervalMin       = 120.0;  // Inactivity >= 120s
+    private const int    UnchangedResubmissionMaxEd     = 5;      // EditDistance <= 5 still "unchanged"
+    private const int    IdenticalSubmissionThreshold   = 2;      // 2+ identical submissions = pattern
+    
+    // ─── Other Behaviors ───
     private const double LowProgressIntervalMax   = 6.0;   // SI < 6s
     private const double ThinkingIntervalMin      = 15.0;  // SI > 15s
+    private const int    LowProgressMaxEditDistance = 25;   // Max ED for symbol cycling
 
-    /// Max edit distance still considered "symbol cycling" for LPTAE.
-    /// Above this threshold the student is making substantive edits even if
-    /// the normalised code structure looks the same.
-    private const int LowProgressMaxEditDistance = 25;
-
+    // ─── Weights (Helplessness Score Delta) ───
     private const double WeightGaming               = 20.0;
-    private const double WeightDisengagement        = 15.0;
-    private const double WeightWheelSpinning        = 15.0;
-    private const double WeightLowProgress          = 10.0;
-    private const double WeightHintWithheld         = -5.0;
-    private const double WeightActiveThinking       = -10.0;
+    private const double WeightDisengagementHigh    = 20.0;   // Multiple indicators or 120s+ proof
+    private const double WeightDisengagementModerate = 12.0;  // 60% weight for single indicator
+    private const double WeightDisengagementLow      = 8.0;   // 40% weight for weak evidence
+    private const double WeightWheelSpinning         = 15.0;
+    private const double WeightLowProgress           = 10.0;
+    private const double WeightHintWithheld          = -5.0;
+    private const double WeightActiveThinking        = -10.0;
+
 
     public HbdaResult Classify(
         CodeSubmission current,
@@ -44,30 +63,31 @@ public class HbdaService : IHbdaService
         double inactivityDuration)
     {
         if (IsGamingTheSystem(current))
-            return Result(BehaviorState.GamingTheSystem, WeightGaming,
+            return Result(BehaviorState.GamingTheSystem, WeightGaming, ConfidenceLevel.High,
                 $"Gaming: SI={current.SubmissionIntervalSeconds:F1}s, paste={current.PasteDetected}, task={current.TaskElapsedSeconds:F0}s");
 
-        if (IsPostFailureDisengagement(current, previous, inactivityDuration))
-            return Result(BehaviorState.PostFailureDisengagement, WeightDisengagement,
-                $"PostFailureDisengagement: inactivity={inactivityDuration:F1}s after error");
+        // Enhanced PostFailureDisengagement detection with multiple indicators
+        var disengagementResult = EvaluatePostFailureDisengagement(current, previous, sessionHistory, inactivityDuration);
+        if (disengagementResult != null)
+            return disengagementResult;
 
         if (IsWheelSpinning(current, previous, sessionHistory))
-            return Result(BehaviorState.WheelSpinning, WeightWheelSpinning,
+            return Result(BehaviorState.WheelSpinning, WeightWheelSpinning, ConfidenceLevel.High,
                 $"WheelSpinning: >=3 consecutive {current.DiagnosticCategory} errors, no structural change");
 
         if (IsLowProgressTrialAndError(current, previous))
-            return Result(BehaviorState.LowProgressTrialAndError, WeightLowProgress,
+            return Result(BehaviorState.LowProgressTrialAndError, WeightLowProgress, ConfidenceLevel.Moderate,
                 $"LowProgressTrialAndError: SI={current.SubmissionIntervalSeconds:F1}s, only symbol swaps");
 
         if (IsHintWithheld(current, previous))
-            return Result(BehaviorState.HintWithheld, WeightHintWithheld,
+            return Result(BehaviorState.HintWithheld, WeightHintWithheld, ConfidenceLevel.Moderate,
                 $"HintWithheld: SI={current.SubmissionIntervalSeconds:F1}s, new error type");
 
         if (IsActiveThinking(current, previous, sessionHistory))
-            return Result(BehaviorState.ActiveThinking, WeightActiveThinking,
+            return Result(BehaviorState.ActiveThinking, WeightActiveThinking, ConfidenceLevel.High,
                 $"ActiveThinking: SI={current.SubmissionIntervalSeconds:F1}s, progressive/correct, >= 2 consecutive");
 
-        return Result(BehaviorState.LowProgressTrialAndError, WeightLowProgress * 0.5,
+        return Result(BehaviorState.LowProgressTrialAndError, WeightLowProgress * 0.5, ConfidenceLevel.Low,
             "No clear pattern — mild low-progress default");
     }
 
@@ -81,13 +101,155 @@ public class HbdaService : IHbdaService
         || c.PasteDetected
         || c.TaskElapsedSeconds < GamingTaskElapsedMin;
 
-    /// PostFailureDisengagement: keyboard idle >= 120s immediately after an error
-    private static bool IsPostFailureDisengagement(CodeSubmission c, CodeSubmission? prev, double inactivityDuration)
+    /// <summary>
+    /// Comprehensive PostFailureDisengagement (Learned Helplessness) detection.
+    /// Evaluates multiple indicators:
+    ///   1. Inactivity >= 120s after error
+    ///   2. Unchanged/near-unchanged resubmission (ED &lt;= 5)
+    ///   3. Identical submissions repeated (2+ with ED == 0)
+    ///
+    /// Returns null if no disengagement detected.
+    /// Applies exclusion logic for false positives (recovery patterns).
+    /// </summary>
+    private HbdaResult? EvaluatePostFailureDisengagement(
+        CodeSubmission current,
+        CodeSubmission? previous,
+        List<CodeSubmission> sessionHistory,
+        double inactivityDuration)
     {
-        if (inactivityDuration < DisengagementIntervalMin) return false;
-        if (c.IsCorrect) return false;
-        // Previous submission must also have been an error
-        return prev != null && !prev.IsCorrect;
+        // Only applies to unsuccessful submissions
+        if (current.IsCorrect) return null;
+        
+        // Require previous error as baseline
+        if (previous == null || previous.IsCorrect) return null;
+
+        // Collect evidence of indicators
+        bool indicator1_LongInactivity = inactivityDuration >= DisengagementIntervalMin;
+        bool indicator2_UnchangedEdit = current.EditDistance <= UnchangedResubmissionMaxEd;
+        bool indicator3_IdenticalRepeated = IsIdenticalWorkRepeated(current, sessionHistory);
+
+        // If no indicators present, not disengagement
+        if (!indicator1_LongInactivity && !indicator2_UnchangedEdit && !indicator3_IdenticalRepeated)
+            return null;
+
+        // Check exclusion: Recovery patterns after long pause
+        if (ShouldExcludeAsRecoveryPattern(current, previous, sessionHistory, inactivityDuration))
+            return null;
+
+        // Determine confidence based on indicator strength and count
+        var (confidenceLevel, delta) = EvaluateLearnedHelplessnessConfidence(
+            indicator1_LongInactivity, indicator2_UnchangedEdit, indicator3_IdenticalRepeated);
+
+        var indicatorSummary = GetIndicatorSummary(indicator1_LongInactivity, indicator2_UnchangedEdit, indicator3_IdenticalRepeated);
+        
+        return Result(
+            BehaviorState.PostFailureDisengagement,
+            delta,
+            confidenceLevel,
+            $"PostFailureDisengagement ({confidenceLevel}): {indicatorSummary}");
+    }
+
+    /// <summary>
+    /// Detects if student is repeating identical work with no modifications.
+    /// Indicator #3: 2 or more consecutive submissions where EditDistance == 0
+    /// </summary>
+    private static bool IsIdenticalWorkRepeated(CodeSubmission current, List<CodeSubmission> history)
+    {
+        if (history.Count < 1) return false;
+
+        // Count consecutive identical submissions (working backward from current)
+        int identicalCount = 0;
+        string currentNormalized = NormalizeStructure(current.SourceCode);
+
+        foreach (var submission in history.OrderByDescending(s => s.SubmittedAt))
+        {
+            if (submission.EditDistance == 0 && 
+                NormalizeStructure(submission.SourceCode) == currentNormalized &&
+                !submission.IsCorrect)
+            {
+                identicalCount++;
+            }
+            else
+            {
+                break;  // Stop at first difference
+            }
+        }
+
+        return identicalCount >= IdenticalSubmissionThreshold - 1;  // -1 because we count from history
+    }
+
+    /// <summary>
+    /// Determines if this is a recovery pattern that should exclude PostFailureDisengagement detection.
+    /// 
+    /// Exclusion #1: Pause 60-120s followed by substantive approach (ED >= 10)
+    /// Exclusion #2: Pause followed by strategy pivot and eventual success
+    /// </summary>
+    private static bool ShouldExcludeAsRecoveryPattern(
+        CodeSubmission current,
+        CodeSubmission? previous,
+        List<CodeSubmission> sessionHistory,
+        double inactivityDuration)
+    {
+        // Exclusion #1: Brief pause (< 120s) even if ED is small = reflection, not helplessness
+        if (inactivityDuration < DisengagementIntervalMin)
+        {
+            // Allow reflection even with small edits if new error type (exploration)
+            if (previous != null && current.DiagnosticCategory != previous.DiagnosticCategory)
+                return true;
+        }
+
+        // Exclusion #2: Even if 120s+ pause, if followed by major structural change = strategy pivot
+        if (inactivityDuration >= DisengagementIntervalMin && current.EditDistance >= 10)
+        {
+            // Check if error type changed (indicating new approach)
+            if (previous != null && current.DiagnosticCategory != previous.DiagnosticCategory)
+            {
+                // Check if session shows recovery (any successful submissions afterward)
+                bool hasRecoveryInSession = sessionHistory.Any(s => s.IsCorrect);
+                if (hasRecoveryInSession)
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Evaluates confidence level and returns appropriate weight for PostFailureDisengagement.
+    /// 
+    /// HIGH: Multiple indicators OR explicit 120s+ inactivity
+    /// MODERATE: Single indicator without time confirmation (ED or identical repeated)
+    /// LOW: Weak evidence requiring monitoring
+    /// </summary>
+    private static (ConfidenceLevel, double) EvaluateLearnedHelplessnessConfidence(
+        bool hasInactivity120Plus,
+        bool hasUnchangedEdit,
+        bool hasIdenticalRepeated)
+    {
+        int indicatorCount = (hasInactivity120Plus ? 1 : 0) 
+                           + (hasUnchangedEdit ? 1 : 0) 
+                           + (hasIdenticalRepeated ? 1 : 0);
+
+        // HIGH: Multiple indicators OR explicit long inactivity
+        if (indicatorCount >= 2 || hasInactivity120Plus)
+            return (ConfidenceLevel.High, WeightDisengagementHigh);
+
+        // MODERATE: Single indicator without inactivity proof
+        if (indicatorCount == 1 && (hasUnchangedEdit || hasIdenticalRepeated))
+            return (ConfidenceLevel.Moderate, WeightDisengagementModerate);
+
+        // LOW: Weak or incomplete evidence
+        return (ConfidenceLevel.Low, WeightDisengagementLow);
+    }
+
+    /// <summary>Helper to generate human-readable summary of which indicators triggered.</summary>
+    private static string GetIndicatorSummary(bool ind1, bool ind2, bool ind3)
+    {
+        var parts = new List<string>();
+        if (ind1) parts.Add("Inactivity>=120s");
+        if (ind2) parts.Add("UnchangedEdit(ED<=5)");
+        if (ind3) parts.Add("IdenticalRepeated(2+)");
+        return string.Join(" + ", parts);
     }
 
     /// WheelSpinning: >= 3 consecutive submissions share the same DiagnosticCategory AND no structural change
@@ -115,8 +277,6 @@ public class HbdaService : IHbdaService
         if (prev == null) return false;
 
         // Substantive rewrites disqualify LPTAE even if normalised structure matches.
-        // e.g. moving code to a different line changes edit distance significantly
-        // but can produce the same normalised form.
         if (c.EditDistance > LowProgressMaxEditDistance) return false;
 
         // Source changed (ED > 0) but only in numbers/operators
@@ -166,6 +326,12 @@ public class HbdaService : IHbdaService
         return Regex.Replace(code, @"\s+", " ").Trim();
     }
 
-    private static HbdaResult Result(BehaviorState state, double delta, string reason) =>
-        new() { State = state, HelplessnessScoreDelta = delta, Reasoning = reason };
+    private static HbdaResult Result(BehaviorState state, double delta, ConfidenceLevel confidence, string reason) =>
+        new() 
+        { 
+            State = state, 
+            HelplessnessScoreDelta = delta, 
+            Reasoning = reason,
+            Confidence = confidence
+        };
 }

@@ -19,6 +19,14 @@ public class HbdaResult
     public BehaviorState State { get; set; }
     public double HelplessnessScoreDelta { get; set; }
     public string Reasoning { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Confidence level in this behavior classification.
+    /// HIGH: Multiple indicators or explicit evidence
+    /// MODERATE: Single strong indicator or combined weak indicators
+    /// LOW: Weak evidence requiring monitoring
+    /// </summary>
+    public ConfidenceLevel Confidence { get; set; } = ConfidenceLevel.High;
 }
 
 // ── Stage 2: AST Diagnostic Engine ──
