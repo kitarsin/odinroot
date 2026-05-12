@@ -14,18 +14,29 @@ public class InstructorController : ControllerBase
     [HttpGet("overview")]
     public async Task<ActionResult> GetClassOverview()
     {
-        var players = await _db.Players.ToListAsync();
-        var logs = await _db.InteractionLogs.ToListAsync();
-        var behaviorDist = logs.GroupBy(l => l.BehaviorState)
-            .ToDictionary(g => g.Key, g => g.Count());
+        // Use SQL aggregates only — avoids materializing every profile row (e.g. large game_state jsonb),
+        // which can time out or fail on production.
+        var totalStudents = await _db.Players.CountAsync();
+        var totalSubmissions = totalStudents == 0
+            ? 0
+            : await _db.Players.SumAsync(p => p.TotalSubmissions);
+        var averageHelplessnessScore = totalStudents == 0
+            ? 0.0
+            : Math.Round(await _db.Players.AverageAsync(p => p.HelplessnessScore), 2);
+        var studentsInDistress = await _db.Players.CountAsync(p => p.HelplessnessScore >= 50);
+
+        var behaviorRows = await _db.InteractionLogs
+            .GroupBy(l => l.BehaviorState ?? "")
+            .Select(g => new { State = g.Key, Count = g.Count() })
+            .ToListAsync();
+        var behaviorDist = behaviorRows.ToDictionary(x => x.State, x => x.Count);
 
         return Ok(new
         {
-            TotalStudents = players.Count,
-            TotalSubmissions = players.Sum(p => p.TotalSubmissions),
-            AverageHelplessnessScore = players.Count > 0
-                ? Math.Round(players.Average(p => p.HelplessnessScore), 2) : 0,
-            StudentsInDistress = players.Count(p => p.HelplessnessScore >= 50),
+            TotalStudents = totalStudents,
+            TotalSubmissions = totalSubmissions,
+            AverageHelplessnessScore = averageHelplessnessScore,
+            StudentsInDistress = studentsInDistress,
             BehaviorDistribution = behaviorDist
         });
     }
@@ -51,8 +62,8 @@ public class InstructorController : ControllerBase
     [HttpGet("students")]
     public async Task<ActionResult> GetStudentList()
     {
+        // Project in SQL — do not Include() full Player rows (avoids loading game_state / jsonb blobs).
         var students = await _db.Players
-            .Include(p => p.MasteryStates)
             .OrderByDescending(p => p.HelplessnessScore)
             .Select(p => new
             {

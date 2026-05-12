@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Text.Json;
 using System.Text;
 using ODIN.Api.Data;
 using ODIN.Api.Services;
@@ -101,16 +102,16 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// CORS — allow your React frontend
-var allowedOrigins = builder.Configuration
-    .GetSection("Cors:AllowedOrigins")
-    .Get<string[]>() ?? [];
+// CORS — merge appsettings array + Cors:AllowedOriginsCsv + CORS_ALLOWED_ORIGINS (comma-separated, for Railway/Vercel)
+var corsOriginAllowlist = BuildCorsOriginAllowlist(builder.Configuration);
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("GameClient", policy =>
     {
-        policy.WithOrigins(allowedOrigins)
+        policy.SetIsOriginAllowed(origin =>
+                !string.IsNullOrWhiteSpace(origin) &&
+                corsOriginAllowlist.Contains(origin.Trim()))
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -126,6 +127,33 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("GameClient");
+
+// Unhandled exceptions skip normal CORS handling; echo Allow-Origin for allowlisted frontends so browsers surface real errors.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        var log = context.RequestServices.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("UnhandledException");
+        log.LogError(ex, "Unhandled exception on {Method} {Path}", context.Request.Method, context.Request.Path);
+
+        if (context.Response.HasStarted)
+            throw;
+
+        AppendCorsHeadersIfAllowed(context, corsOriginAllowlist);
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json; charset=utf-8";
+        var json = app.Environment.IsDevelopment()
+            ? JsonSerializer.Serialize(new { error = "Internal server error", detail = ex.Message })
+            : JsonSerializer.Serialize(new { error = "Internal server error" });
+        await context.Response.WriteAsync(json);
+    }
+});
+
 app.UseAuthentication();  // Validate Supabase JWT
 app.UseAuthorization();
 app.MapControllers();
@@ -139,3 +167,31 @@ Console.WriteLine(@"
 ");
 
 app.Run();
+
+static HashSet<string> BuildCorsOriginAllowlist(IConfiguration configuration)
+{
+    var fromSection = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+    var csv = configuration["Cors:AllowedOriginsCsv"] ?? configuration["CORS_ALLOWED_ORIGINS"];
+    var fromCsv = string.IsNullOrWhiteSpace(csv)
+        ? []
+        : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var o in fromSection.Concat(fromCsv))
+    {
+        var t = o?.Trim();
+        if (!string.IsNullOrEmpty(t))
+            set.Add(t);
+    }
+
+    return set;
+}
+
+static void AppendCorsHeadersIfAllowed(HttpContext context, HashSet<string> allowlist)
+{
+    var origin = context.Request.Headers.Origin.ToString();
+    if (string.IsNullOrEmpty(origin) || !allowlist.Contains(origin.Trim()))
+        return;
+    context.Response.Headers.Append("Access-Control-Allow-Origin", origin.Trim());
+    context.Response.Headers.Append("Access-Control-Allow-Credentials", "true");
+    context.Response.Headers.Append("Vary", "Origin");
+}
