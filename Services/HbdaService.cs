@@ -137,17 +137,9 @@ public class HbdaService : IHbdaService
     private static (bool IsGaming, double Confidence, string Reason) IsGamingTheSystem(
         CodeSubmission c, List<CodeSubmission> history, bool rapidTaskSurfaceWithoutKeys)
     {
-        if (rapidTaskSurfaceWithoutKeys
-            && c.TotalTimeSeconds <= 5.0
-            && c.KeyDownCount == 0
-            && c.HintUsageCount <= GamingHintRequestMin)
-        {
-            return (true, 1.0, "High Confidence Gaming: Rapid compile (<5s on task) with zero keyboard interaction");
-        }
-
-        // Primary gaming indicator: rapid repeated hint requests.
-        // Paste is blocked locally in the editor, so it is no longer used as a
-        // server-side GamingTheSystem classifier.
+        // Primary and only gaming indicator: rapid repeated hint requests.
+        // Paste is blocked locally in the editor, and rapid compiles are handled
+        // by the normal low-progress/tinkering path instead of GamingTheSystem.
         if (c.HintUsageCount > GamingHintRequestMin && c.TaskElapsedSeconds <= GamingHintWindowSeconds)
         {
             return (true, 1.0, $"High Confidence Gaming: Excessive hints ({c.HintUsageCount}) in {c.TaskElapsedSeconds:F0}s");
