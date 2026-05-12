@@ -58,6 +58,7 @@ public class SubmissionController : ControllerBase
 
         // ── Stage 1: AST Diagnosis ──
         var diagnosticResult = new DiagnosticResult { IsCorrect = false, Category = DiagnosticCategory.None, Message = string.Empty };
+        string? actualOutput = null;
 
         if (request.IsHintRequest)
         {
@@ -81,7 +82,6 @@ public class SubmissionController : ControllerBase
         //   • Code wasn't flagged as unchanged starter (nothing to execute meaningfully)
         //   • No Roslyn compile errors (broken code can't run)
         //   • Puzzle has expected output recorded in the DB
-        string? actualOutput = null;
         if (diagnosticResult.IsCorrect
             && puzzle?.ExpectedOutput is { Length: > 0 } expectedOut)
         {
