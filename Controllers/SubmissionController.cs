@@ -81,10 +81,11 @@ public class SubmissionController : ControllerBase
         //   • Code wasn't flagged as unchanged starter (nothing to execute meaningfully)
         //   • No Roslyn compile errors (broken code can't run)
         //   • Puzzle has expected output recorded in the DB
+        string? actualOutput = null;
         if (diagnosticResult.IsCorrect
             && puzzle?.ExpectedOutput is { Length: > 0 } expectedOut)
         {
-            var actualOutput = await _codeExecution.ExecuteAsync(request.SourceCode);
+            actualOutput = await _codeExecution.ExecuteAsync(request.SourceCode);
 
             if (actualOutput == null)
             {
@@ -385,6 +386,7 @@ public class SubmissionController : ControllerBase
             DiagnosticCategory = diagnosticResult.Category.ToString(),
             DiagnosticMessage = diagnosticResult.Message,
             CompilerDiagnostics = diagnosticResult.CompilerDiagnostics,
+            ActualOutput = actualOutput,
             BehaviorState = hbdaResult.State.ToString(),
             HelplessnessScore = affectiveResult.UpdatedHelplessnessScore,
             HelplessnessScoreDelta = hbdaResult.HelplessnessScoreDelta,

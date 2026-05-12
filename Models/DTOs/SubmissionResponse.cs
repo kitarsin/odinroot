@@ -24,6 +24,9 @@ public class SubmissionResponse
     /// <summary>Roslyn compiler errors/warnings if any (for the code editor gutter).</summary>
     public List<CompilerDiagnosticDto> CompilerDiagnostics { get; set; } = new();
 
+    /// <summary>The captured output from the code execution (if any).</summary>
+    public string? ActualOutput { get; set; }
+
     // ── Behavioral Analysis Results ──
 
     /// <summary>The behavioral state classified by HBDA.</summary>
