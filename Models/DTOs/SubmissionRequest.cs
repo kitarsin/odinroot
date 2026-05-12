@@ -29,6 +29,11 @@ public class SubmissionRequest
     public int HintUsageCount { get; set; } = 0;
 
     public bool IsHintRequest { get; set; }
+
+    /// <summary>
+    /// When true, server records minimal telemetry for HBDA (e.g. session abandoned) without running AST/BKT on code.
+    /// </summary>
+    public bool IsSessionEndTelemetry { get; set; }
 }
 
 /// <summary>
@@ -64,6 +69,26 @@ public class KeystrokePayload
     /// When true, the server must not trigger any intervention dialogue.
     /// </summary>
     public bool IsFirstSubmission { get; set; }
+
+    /// <summary>0–1: longest rapid typing burst vs task size (client-computed; server may refine from rawEvents).</summary>
+    public double TypingBurstCoverage { get; set; }
+
+    /// <summary>Backspace/delete-driven corrections in this attempt (client).</summary>
+    public int SelfCorrectionCount { get; set; }
+
+    /// <summary>
+    /// “Compile checks” without substantive edits — client hint or server fallback from identical resubmits.
+    /// </summary>
+    public int SystemCheckCount { get; set; }
+
+    /// <summary>
+    /// Seconds idle after the last compiler error until first keystroke, or until submit if no keys (client).
+    /// Use -1 when not applicable (no prior error in this attempt window).
+    /// </summary>
+    public double PostErrorInactivitySeconds { get; set; } = -1;
+
+    /// <summary>Key-down events in this attempt (client); used for rapid-dismiss / zero-interaction checks.</summary>
+    public int KeyDownCount { get; set; }
 }
 
 /// <summary>

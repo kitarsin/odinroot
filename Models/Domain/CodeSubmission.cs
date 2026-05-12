@@ -38,6 +38,10 @@ public class CodeSubmission
     public bool PasteDetected { get; set; }
     public double TaskElapsedSeconds { get; set; }
 
+    /// <summary>Populated from client for HBDA only; not persisted to PostgreSQL.</summary>
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public int KeyDownCount { get; set; }
+
     // AST diagnosis
     public string DiagnosticCategory { get; set; } = "None";
     public string? DiagnosticMessage { get; set; }

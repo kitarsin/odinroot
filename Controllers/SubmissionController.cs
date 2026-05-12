@@ -45,6 +45,9 @@ public class SubmissionController : ControllerBase
         var session = await _db.GameSessions.FindAsync(request.SessionId);
         if (session == null) return NotFound(new { error = "Session not found" });
 
+        if (request.IsSessionEndTelemetry)
+            return await HandleSessionEndTelemetryAsync(request, player, session);
+
         if (!Enum.TryParse<SkillType>(request.SkillType, true, out var skillTypeEnum))
             return BadRequest(new { error = "Invalid SkillType", value = request.SkillType });
 
@@ -149,6 +152,11 @@ public class SubmissionController : ControllerBase
         double inactivityDuration = request.KeystrokeData.InactivityDuration;
         double taskElapsed        = (DateTime.UtcNow - session.StartedAt).TotalSeconds;
 
+        var sessionHistory = await _db.CodeSubmissions
+            .Where(s => s.SessionId == request.SessionId && s.UserId == request.PlayerId)
+            .OrderBy(s => s.SubmittedAt)
+            .ToListAsync();
+
         // ── Create submission record ──
         var submission = new CodeSubmission
         {
@@ -172,13 +180,37 @@ public class SubmissionController : ControllerBase
             DiagnosticMessage = diagnosticResult.Message
         };
 
-        // ── HBDA Classification ──
-        var sessionHistory = await _db.CodeSubmissions
-            .Where(s => s.SessionId == request.SessionId && s.UserId == request.PlayerId)
-            .OrderBy(s => s.SubmittedAt)
-            .ToListAsync();
+        var rawEvents = request.KeystrokeData.RawEvents;
+        var starterRef = puzzle?.StarterCode ?? "";
+        var serverBurst = SubmissionTelemetryHelper.EstimateTypingBurstCoverage(rawEvents, request.SourceCode, starterRef);
+        submission.TypingBurstCoverage = request.KeystrokeData.TypingBurstCoverage > 0
+            ? request.KeystrokeData.TypingBurstCoverage
+            : serverBurst;
 
-        var hbdaResult = _hbda.Classify(submission, previousSubmission, sessionHistory, inactivityDuration);
+        var serverSelf = SubmissionTelemetryHelper.EstimateSelfCorrectionsFromRaw(rawEvents);
+        submission.SelfCorrectionCount = request.KeystrokeData.SelfCorrectionCount > 0
+            ? request.KeystrokeData.SelfCorrectionCount
+            : serverSelf;
+
+        var keyDownCount = request.KeystrokeData.KeyDownCount > 0
+            ? request.KeystrokeData.KeyDownCount
+            : SubmissionTelemetryHelper.CountKeyDowns(rawEvents);
+        submission.KeyDownCount = keyDownCount;
+
+        var identicalTrail = SubmissionTelemetryHelper.CountTrailingIdenticalCompileChecks(
+            sessionHistory, request.SourceCode, NormalizeCode);
+        submission.SystemCheckCount = Math.Max(request.KeystrokeData.SystemCheckCount, identicalTrail);
+
+        // ── HBDA Classification ──
+        var hbdaResult = _hbda.Classify(
+            submission,
+            previousSubmission,
+            sessionHistory,
+            inactivityDuration,
+            request.KeystrokeData.PostErrorInactivitySeconds,
+            rapidTaskSurfaceWithoutKeys: request.KeystrokeData.TotalTimeSeconds <= 5.0
+                && keyDownCount == 0
+                && !request.IsHintRequest);
         submission.BehaviorState = hbdaResult.State.ToString();
 
         // ── BKT Update ──
@@ -326,7 +358,7 @@ public class SubmissionController : ControllerBase
         };
         _db.InteractionLogs.Add(interactionLog);
 
-        if (request.KeystrokeData.RawEvents is { Count: > 0 } rawEvents)
+        if (rawEvents is { Count: > 0 })
         {
             _db.KeystrokeRawEventBatches.Add(new KeystrokeRawEventBatch
             {
@@ -359,6 +391,130 @@ public class SubmissionController : ControllerBase
             LevelUnlocked = interventionResult.LevelUnlocked,
             XpAwarded = interventionResult.XpAwarded,
             NewAchievements = newAchievements
+        });
+    }
+
+    private async Task<ActionResult<SubmissionResponse>> HandleSessionEndTelemetryAsync(
+        SubmissionRequest request,
+        Player player,
+        GameSession session)
+    {
+        if (request.IsHintRequest)
+            return BadRequest(new { error = "Session end telemetry cannot be combined with hint requests" });
+
+        var previousSubmission = await _db.CodeSubmissions
+            .Where(s => s.SessionId == request.SessionId && s.UserId == request.PlayerId)
+            .OrderByDescending(s => s.SubmittedAt)
+            .FirstOrDefaultAsync();
+
+        var sessionHistory = await _db.CodeSubmissions
+            .Where(s => s.SessionId == request.SessionId && s.UserId == request.PlayerId)
+            .OrderBy(s => s.SubmittedAt)
+            .ToListAsync();
+
+        double submissionInterval = previousSubmission != null
+            ? (request.KeystrokeData.TimeSinceLastSubmit > 0
+                ? request.KeystrokeData.TimeSinceLastSubmit
+                : (DateTime.UtcNow - previousSubmission.SubmittedAt).TotalSeconds)
+            : request.KeystrokeData.TotalTimeSeconds;
+
+        var diagnosticResult = new DiagnosticResult
+        {
+            IsCorrect = false,
+            Category = DiagnosticCategory.SessionAbandoned,
+            Message = "Session ended without a graded compile."
+        };
+
+        var submission = new CodeSubmission
+        {
+            UserId = request.PlayerId,
+            SessionId = request.SessionId,
+            QuestionId = request.PuzzleId,
+            SourceCode = "__SESSION_END__",
+            SkillType = request.SkillType,
+            SubmittedAt = DateTime.UtcNow,
+            AverageFlightTimeMs = request.KeystrokeData.AverageFlightTimeMs,
+            AverageDwellTimeMs = request.KeystrokeData.AverageDwellTimeMs,
+            InitialLatencyMs = request.KeystrokeData.InitialLatencyMs,
+            TotalTimeSeconds = request.KeystrokeData.TotalTimeSeconds,
+            EditDistance = 0,
+            SubmissionIntervalSeconds = submissionInterval,
+            HintUsageCount = request.HintUsageCount,
+            PasteDetected = request.KeystrokeData.PasteDetected,
+            TaskElapsedSeconds = (DateTime.UtcNow - session.StartedAt).TotalSeconds,
+            IsCorrect = false,
+            DiagnosticCategory = diagnosticResult.Category.ToString(),
+            DiagnosticMessage = diagnosticResult.Message,
+            TypingBurstCoverage = request.KeystrokeData.TypingBurstCoverage,
+            SystemCheckCount = request.KeystrokeData.SystemCheckCount,
+            SelfCorrectionCount = request.KeystrokeData.SelfCorrectionCount,
+        };
+        submission.KeyDownCount = request.KeystrokeData.KeyDownCount > 0
+            ? request.KeystrokeData.KeyDownCount
+            : SubmissionTelemetryHelper.CountKeyDowns(request.KeystrokeData.RawEvents);
+
+        var hbdaResult = _hbda.Classify(
+            submission,
+            previousSubmission,
+            sessionHistory,
+            request.KeystrokeData.InactivityDuration,
+            request.KeystrokeData.PostErrorInactivitySeconds,
+            request.KeystrokeData.TotalTimeSeconds <= 5.0 && submission.KeyDownCount == 0);
+        submission.BehaviorState = hbdaResult.State.ToString();
+
+        var bktResult = new BktResult
+        {
+            IsMastered = false,
+            ProbabilityMastery = 0.0,
+            IsWarmUpPhase = false,
+            AttemptCount = 0,
+            ConsecutiveCorrect = 0
+        };
+        var affectiveResult = _affectiveState.Evaluate(hbdaResult, bktResult, player.HelplessnessScore);
+        player.HelplessnessScore = affectiveResult.UpdatedHelplessnessScore;
+        player.UpdatedAt = DateTime.UtcNow;
+
+        var interventionResult = new InterventionResult { Type = InterventionType.None };
+        submission.InterventionType = interventionResult.Type.ToString();
+
+        _db.CodeSubmissions.Add(submission);
+        session.SubmissionCount++;
+
+        await _db.SaveChangesAsync();
+
+        _db.InteractionLogs.Add(new InteractionLog
+        {
+            UserId = request.PlayerId,
+            SubmissionId = submission.Id,
+            BehaviorState = hbdaResult.State.ToString(),
+            HelplessnessScoreDelta = hbdaResult.HelplessnessScoreDelta,
+            CumulativeHelplessnessScore = affectiveResult.UpdatedHelplessnessScore,
+            MasteryProbability = bktResult.ProbabilityMastery,
+            InterventionTriggered = interventionResult.Type.ToString(),
+            DiagnosticCategory = diagnosticResult.Category.ToString(),
+            SkillType = request.SkillType
+        });
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new SubmissionResponse
+        {
+            SubmissionId = submission.Id,
+            IsCorrect = false,
+            DiagnosticCategory = diagnosticResult.Category.ToString(),
+            DiagnosticMessage = diagnosticResult.Message,
+            CompilerDiagnostics = [],
+            BehaviorState = hbdaResult.State.ToString(),
+            HelplessnessScore = affectiveResult.UpdatedHelplessnessScore,
+            HelplessnessScoreDelta = hbdaResult.HelplessnessScoreDelta,
+            MasteryProbability = bktResult.ProbabilityMastery,
+            IsMastered = bktResult.IsMastered,
+            IsWarmUpPhase = bktResult.IsWarmUpPhase,
+            InterventionType = interventionResult.Type.ToString(),
+            NpcDialogue = null,
+            LevelUnlocked = false,
+            XpAwarded = 0,
+            NewAchievements = []
         });
     }
 

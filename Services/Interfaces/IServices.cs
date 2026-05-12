@@ -11,7 +11,9 @@ public interface IHbdaService
         CodeSubmission currentSubmission,
         CodeSubmission? previousSubmission,
         List<CodeSubmission> sessionHistory,
-        double inactivityDuration);   // client-measured idle time (seconds)
+        double inactivityDuration,
+        double postErrorInactivitySeconds = -1,
+        bool rapidTaskSurfaceWithoutKeys = false);
 }
 
 public class HbdaResult

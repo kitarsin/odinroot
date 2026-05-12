@@ -81,6 +81,9 @@ public class OdinDbContext : DbContext
             e.Property(s => s.AverageDwellTimeMs).HasColumnName("avg_dwell_time_ms");
             e.Property(s => s.InitialLatencyMs).HasColumnName("initial_latency_ms");
             e.Property(s => s.TotalTimeSeconds).HasColumnName("total_time_seconds");
+            e.Property(s => s.TypingBurstCoverage).HasColumnName("typing_burst_coverage");
+            e.Property(s => s.SystemCheckCount).HasColumnName("system_check_count");
+            e.Property(s => s.SelfCorrectionCount).HasColumnName("self_correction_count");
             e.Property(s => s.EditDistance).HasColumnName("edit_distance");
             e.Property(s => s.SubmissionIntervalSeconds).HasColumnName("submission_interval_seconds");
             e.Property(s => s.HintUsageCount).HasColumnName("hint_usage_count");

@@ -85,9 +85,11 @@ public class HbdaService : IHbdaService
         CodeSubmission current,
         CodeSubmission? previous,
         List<CodeSubmission> sessionHistory,
-        double inactivityDuration)
+        double inactivityDuration,
+        double postErrorInactivitySeconds = -1,
+        bool rapidTaskSurfaceWithoutKeys = false)
     {
-        var gamingCheck = IsGamingTheSystem(current, sessionHistory);
+        var gamingCheck = IsGamingTheSystem(current, sessionHistory, rapidTaskSurfaceWithoutKeys);
         if (gamingCheck.IsGaming)
         {
             var confLevel = gamingCheck.Confidence >= 1.0 ? ConfidenceLevel.High :
@@ -97,7 +99,8 @@ public class HbdaService : IHbdaService
         }
 
         // Enhanced PostFailureDisengagement detection with multiple indicators
-        var disengagementResult = EvaluatePostFailureDisengagement(current, previous, sessionHistory, inactivityDuration);
+        var disengagementResult = EvaluatePostFailureDisengagement(
+            current, previous, sessionHistory, inactivityDuration, postErrorInactivitySeconds);
         if (disengagementResult != null)
             return disengagementResult;
 
@@ -131,8 +134,21 @@ public class HbdaService : IHbdaService
     /// <summary>
     /// Gaming the System detection with confidence scores.
     /// </summary>
-    private static (bool IsGaming, double Confidence, string Reason) IsGamingTheSystem(CodeSubmission c, List<CodeSubmission> history)
+    private static (bool IsGaming, double Confidence, string Reason) IsGamingTheSystem(
+        CodeSubmission c, List<CodeSubmission> history, bool rapidTaskSurfaceWithoutKeys)
     {
+        if (c.PasteDetected)
+            return (true, 0.9, "PasteDetected immediately before submit");
+
+        if (rapidTaskSurfaceWithoutKeys
+            && c.TotalTimeSeconds <= 5.0
+            && !c.IsCorrect
+            && c.KeyDownCount == 0
+            && c.HintUsageCount <= GamingHintRequestMin)
+        {
+            return (true, 0.72, "Rapid compile (<5s on task) with zero keyboard interaction");
+        }
+
         // Primary gaming indicator: rapid repeated hint requests.
         // Paste is blocked locally in the editor, so it is no longer used as a
         // server-side GamingTheSystem classifier.
@@ -158,7 +174,8 @@ public class HbdaService : IHbdaService
         CodeSubmission current,
         CodeSubmission? previous,
         List<CodeSubmission> sessionHistory,
-        double inactivityDuration)
+        double inactivityDuration,
+        double postErrorInactivitySeconds)
     {
         // Only applies to unsuccessful submissions
         if (current.IsCorrect) return null;
@@ -167,7 +184,9 @@ public class HbdaService : IHbdaService
         if (previous == null || previous.IsCorrect) return null;
 
         // Collect evidence of indicators
-        bool indicator1_LongInactivity = inactivityDuration >= DisengagementIntervalMin;
+        bool indicator1_LongInactivity = postErrorInactivitySeconds >= 0
+            ? postErrorInactivitySeconds >= DisengagementIntervalMin
+            : inactivityDuration >= DisengagementIntervalMin;
         bool indicator2_UnchangedEdit = current.EditDistance <= UnchangedResubmissionMaxEd;
         bool indicator3_IdenticalRepeated = IsIdenticalWorkRepeated(current, sessionHistory);
 
@@ -176,7 +195,7 @@ public class HbdaService : IHbdaService
             return null;
 
         // Check exclusion: Recovery patterns after long pause
-        if (ShouldExcludeAsRecoveryPattern(current, previous, sessionHistory, inactivityDuration))
+        if (ShouldExcludeAsRecoveryPattern(current, previous, sessionHistory, inactivityDuration, postErrorInactivitySeconds))
             return null;
 
         // Determine confidence based on indicator strength and count
@@ -231,10 +250,15 @@ public class HbdaService : IHbdaService
         CodeSubmission current,
         CodeSubmission? previous,
         List<CodeSubmission> sessionHistory,
-        double inactivityDuration)
+        double inactivityDuration,
+        double postErrorInactivitySeconds)
     {
+        double reflectiveIdle = postErrorInactivitySeconds >= 0
+            ? postErrorInactivitySeconds
+            : inactivityDuration;
+
         // Exclusion #1: Brief pause (< 120s) even if ED is small = reflection, not helplessness
-        if (inactivityDuration < DisengagementIntervalMin)
+        if (reflectiveIdle < DisengagementIntervalMin)
         {
             // Allow reflection even with small edits if new error type (exploration)
             if (previous != null && current.DiagnosticCategory != previous.DiagnosticCategory)
@@ -242,7 +266,7 @@ public class HbdaService : IHbdaService
         }
 
         // Exclusion #2: Even if 120s+ pause, if followed by major structural change = strategy pivot
-        if (inactivityDuration >= DisengagementIntervalMin && current.EditDistance >= 10)
+        if (reflectiveIdle >= DisengagementIntervalMin && current.EditDistance >= 10)
         {
             // Check if error type changed (indicating new approach)
             if (previous != null && current.DiagnosticCategory != previous.DiagnosticCategory)
@@ -310,8 +334,10 @@ public class HbdaService : IHbdaService
         // Exclusion: Rapid character changes (SI < 6s) -> handled by Tinkering
         if (current.SubmissionIntervalSeconds < TinkeringIntervalMax) return null;
 
-        // "Session ends" -> Check if SourceCode is empty or SKIP.
-        bool isSessionEnds = string.IsNullOrWhiteSpace(current.SourceCode) || current.SourceCode == "SKIP";
+        // "Session ends" -> empty / sentinel abandon marker (client session-end telemetry).
+        bool isSessionEnds = string.IsNullOrWhiteSpace(current.SourceCode)
+            || current.SourceCode == "SKIP"
+            || current.SourceCode == "__SESSION_END__";
 
         string currentNorm = NormalizeStructure(current.SourceCode);
 
@@ -697,6 +723,16 @@ public class HbdaService : IHbdaService
         // Must exclude: full external paste
         if (current.PasteDetected) return null;
 
+        if (HasThreePlusConsecutiveSameRuntimeErrors(current, sessionHistory))
+            return null;
+
+        // Post-error long pause on the same error is not "planning" / ActiveThinking
+        if (previous != null && !previous.IsCorrect
+            && current.DiagnosticCategory == previous.DiagnosticCategory
+            && (current.SubmissionIntervalSeconds > ThinkingIntervalMin
+                || current.InitialLatencyMs / 1000.0 >= PreTaskPauseMin))
+            return null;
+
         bool isExtendedPause = current.SubmissionIntervalSeconds > ThinkingIntervalMin || 
                                (current.InitialLatencyMs / 1000.0) >= PreTaskPauseMin;
         
@@ -770,6 +806,21 @@ public class HbdaService : IHbdaService
         if (sysChecks) parts.Add("MinimalSysChecks");
         if (selfCorr) parts.Add("SelfCorrections");
         return string.Join(" + ", parts);
+    }
+
+    private static bool HasThreePlusConsecutiveSameRuntimeErrors(CodeSubmission current, List<CodeSubmission> sessionHistory)
+    {
+        if (current.IsCorrect || current.DiagnosticCategory == "None") return false;
+        var count = 1;
+        foreach (var s in sessionHistory.OrderByDescending(h => h.SubmittedAt))
+        {
+            if (!s.IsCorrect && s.DiagnosticCategory == current.DiagnosticCategory)
+                count++;
+            else
+                break;
+        }
+
+        return count >= 3;
     }
 
     // ═══════════════════════════════════════════════════════════

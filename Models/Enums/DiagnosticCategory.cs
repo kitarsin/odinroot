@@ -37,5 +37,8 @@ public enum DiagnosticCategory
     GenericLogicError,
 
     /// <summary>Submitted code is identical to the provided starter template — no solution attempt detected.</summary>
-    UnchangedStarterCode
+    UnchangedStarterCode,
+
+    /// <summary>Client reported the battle/session ended without a final graded compile (telemetry only).</summary>
+    SessionAbandoned
 }
