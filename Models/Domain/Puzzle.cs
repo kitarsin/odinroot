@@ -14,4 +14,6 @@ public class Puzzle
     public bool IsActive { get; set; } = true;
     // JSONB: array of SecondaryTestCase for anti-hardcoding validation
     public string? TestCases { get; set; }
+    // JSONB: array of string hints
+    public string? Hints { get; set; }
 }

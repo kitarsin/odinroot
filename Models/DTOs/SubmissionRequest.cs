@@ -27,6 +27,8 @@ public class SubmissionRequest
     public KeystrokePayload KeystrokeData { get; set; } = new();
 
     public int HintUsageCount { get; set; } = 0;
+
+    public bool IsHintRequest { get; set; }
 }
 
 /// <summary>

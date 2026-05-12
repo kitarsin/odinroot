@@ -54,10 +54,18 @@ public class SubmissionController : ControllerBase
             puzzle = await _db.Puzzles.FindAsync(puzzleGuid);
 
         // ── Stage 1: AST Diagnosis ──
-        var diagnosticResult = _diagnosticEngine.Diagnose(request.SourceCode, skillTypeEnum);
+        var diagnosticResult = new DiagnosticResult { IsCorrect = false, Category = DiagnosticCategory.None, Message = string.Empty };
 
-        // ── Starter Code Guard: block submissions identical to the starter template ──
-        // Normalization strips comments and whitespace so trivial edits don't bypass.
+        if (request.IsHintRequest)
+        {
+            diagnosticResult.Message = "Hint requested.";
+        }
+        else
+        {
+            diagnosticResult = _diagnosticEngine.Diagnose(request.SourceCode, skillTypeEnum);
+
+            // ── Starter Code Guard: block submissions identical to the starter template ──
+            // Normalization strips comments and whitespace so trivial edits don't bypass.
         if (puzzle != null && NormalizeCode(request.SourceCode) == NormalizeCode(puzzle.StarterCode))
         {
             diagnosticResult.IsCorrect = false;
@@ -117,6 +125,7 @@ public class SubmissionController : ControllerBase
                     }
                 }
             }
+            }
         }
 
         // ── Retrieve previous submission for edit distance ──
@@ -173,8 +182,11 @@ public class SubmissionController : ControllerBase
         submission.BehaviorState = hbdaResult.State.ToString();
 
         // ── BKT Update ──
-        var bktResult = await _bkt.UpdateMasteryAsync(
-            request.PlayerId, request.SkillType, diagnosticResult.IsCorrect);
+        var bktResult = new BktResult { IsMastered = false, ProbabilityMastery = 0.0 };
+        if (!request.IsHintRequest)
+        {
+            bktResult = await _bkt.UpdateMasteryAsync(request.PlayerId, request.SkillType, diagnosticResult.IsCorrect);
+        }
 
         // ── Affective State — logging only (admin/research visibility, never shown to students) ──
         var affectiveResult = _affectiveState.Evaluate(hbdaResult, bktResult, player.HelplessnessScore);
@@ -185,11 +197,54 @@ public class SubmissionController : ControllerBase
         // ── Adaptive Intervention ──
         int currentHintTier = sessionHistory.Count(s => s.InterventionType == "ScaffoldingHint");
 
-        var interventionResult = await _interventionController.DetermineInterventionAsync(
-            hbdaResult.State, diagnosticResult, bktResult,
-            skillTypeEnum, currentHintTier,
-            request.KeystrokeData.IsFirstSubmission,
-            previousSubmission?.BehaviorState ?? "");
+        InterventionResult interventionResult;
+        
+        if (request.IsHintRequest)
+        {
+            if (hbdaResult.State == BehaviorState.GamingTheSystem)
+            {
+                interventionResult = await _interventionController.DetermineInterventionAsync(
+                    hbdaResult.State, diagnosticResult, bktResult,
+                    skillTypeEnum, currentHintTier,
+                    request.KeystrokeData.IsFirstSubmission,
+                    previousSubmission?.BehaviorState ?? "");
+            }
+            else
+            {
+                string hintText = "No additional hints available.";
+                if (!string.IsNullOrWhiteSpace(puzzle?.Hints))
+                {
+                    try
+                    {
+                        var hintsArray = JsonSerializer.Deserialize<List<string>>(puzzle.Hints);
+                        if (hintsArray != null && hintsArray.Count > 0)
+                        {
+                            int hintIndex = Math.Max(0, request.HintUsageCount - 1);
+                            hintIndex = Math.Min(hintIndex, hintsArray.Count - 1);
+                            hintText = hintsArray[hintIndex];
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to parse hints array for puzzle {PuzzleId}", puzzle.Id);
+                    }
+                }
+
+                interventionResult = new InterventionResult
+                {
+                    Type = InterventionType.ScaffoldingHint,
+                    NpcDialogue = new NpcDialogueDto { DialogueText = hintText }
+                };
+            }
+        }
+        else
+        {
+            interventionResult = await _interventionController.DetermineInterventionAsync(
+                hbdaResult.State, diagnosticResult, bktResult,
+                skillTypeEnum, currentHintTier,
+                request.KeystrokeData.IsFirstSubmission,
+                previousSubmission?.BehaviorState ?? "");
+        }
 
         submission.InterventionType = interventionResult.Type.ToString();
         player.ExperiencePoints += interventionResult.XpAwarded;

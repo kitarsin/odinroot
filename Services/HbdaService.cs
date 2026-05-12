@@ -43,9 +43,9 @@ public class HbdaService : IHbdaService
         List<CodeSubmission> sessionHistory,
         double inactivityDuration)
     {
-        if (IsGamingTheSystem(current))
-            return Result(BehaviorState.GamingTheSystem, WeightGaming,
-                $"Gaming: SI={current.SubmissionIntervalSeconds:F1}s, paste={current.PasteDetected}, task={current.TaskElapsedSeconds:F0}s");
+        var gamingCheck = IsGamingTheSystem(current, sessionHistory);
+        if (gamingCheck.IsGaming)
+            return Result(BehaviorState.GamingTheSystem, WeightGaming * gamingCheck.Confidence, gamingCheck.Reason);
 
         if (IsPostFailureDisengagement(current, previous, inactivityDuration))
             return Result(BehaviorState.PostFailureDisengagement, WeightDisengagement,
@@ -75,11 +75,42 @@ public class HbdaService : IHbdaService
     // Detectors
     // ═══════════════════════════════════════════════════════════
 
-    /// Gaming: SI < 2s OR paste detected OR total task time < 15s
-    private static bool IsGamingTheSystem(CodeSubmission c) =>
-        c.SubmissionIntervalSeconds < GamingIntervalMax
-        || c.PasteDetected
-        || c.TaskElapsedSeconds < GamingTaskElapsedMin;
+    /// <summary>
+    /// Gaming the System detection with confidence scores.
+    /// </summary>
+    private static (bool IsGaming, double Confidence, string Reason) IsGamingTheSystem(CodeSubmission c, List<CodeSubmission> history)
+    {
+        // Must exclude: Paste actions used to copy the student's own prior work
+        bool isPasteOfPriorWork = false;
+        if (c.PasteDetected && history.Count > 0)
+        {
+            string currentNorm = NormalizeStructure(c.SourceCode);
+            isPasteOfPriorWork = history.Any(h => NormalizeStructure(h.SourceCode) == currentNorm);
+        }
+
+        bool actualPasteDetected = c.PasteDetected && !isPasteOfPriorWork;
+
+        // High Confidence (1.0)
+        if (actualPasteDetected || c.TaskElapsedSeconds < GamingTaskElapsedMin || c.SubmissionIntervalSeconds < GamingIntervalMax)
+        {
+            return (true, 1.0, $"High Confidence Gaming: paste={actualPasteDetected}, task={c.TaskElapsedSeconds:F0}s, SI={c.SubmissionIntervalSeconds:F1}s");
+        }
+
+        // Moderate Confidence (0.75): Bulk paste followed by minor symbol adjustments
+        var lastSub = history.OrderByDescending(h => h.SubmittedAt).FirstOrDefault();
+        if (lastSub != null && lastSub.PasteDetected && c.EditDistance <= 25 && c.EditDistance > 0)
+        {
+            return (true, 0.75, $"Moderate Confidence Gaming: Minor adjustments after paste. ED={c.EditDistance}");
+        }
+
+        // Low Confidence (0.5): Excessive hint requests (>3 in 60s)
+        if (c.HintUsageCount > 3 && c.TaskElapsedSeconds < 60.0)
+        {
+            return (true, 0.5, $"Low Confidence Gaming: Excessive hints ({c.HintUsageCount}) in {c.TaskElapsedSeconds:F0}s");
+        }
+
+        return (false, 0.0, "");
+    }
 
     /// PostFailureDisengagement: keyboard idle >= 120s immediately after an error
     private static bool IsPostFailureDisengagement(CodeSubmission c, CodeSubmission? prev, double inactivityDuration)
