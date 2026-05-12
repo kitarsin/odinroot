@@ -11,7 +11,7 @@ namespace ODIN.Api.Services;
 /// defined by the project psychologist.
 ///
 /// Priority order (first match wins):
-///   1. GamingTheSystem              — SI &lt; 2s OR paste-detected OR task &lt; 15s
+///   1. GamingTheSystem              — more than 3 hint requests within 60 seconds
 ///   2. PostFailureDisengagement     — Multiple indicators of learned helplessness
 ///   3. WheelSpinning                — &gt;= 3 consecutive same errors, no structural change
 ///   4. LowProgressTrialAndError     — SI &lt; 6s with character/value cycling or persistent error
@@ -38,8 +38,8 @@ namespace ODIN.Api.Services;
 public class HbdaService : IHbdaService
 {
     // ─── Gaming Detection ───
-    private const double GamingIntervalMax        = 2.0;   // SI < 2s
-    private const double GamingTaskElapsedMin     = 15.0;  // task elapsed < 15s
+    private const int    GamingHintRequestMin     = 3;     // > 3 hints
+    private const double GamingHintWindowSeconds  = 60.0;  // within 60s
     
     // ─── Disengagement Detection (Learned Helplessness) ───
     private const double DisengagementIntervalMin       = 120.0;  // Inactivity >= 120s
@@ -133,33 +133,12 @@ public class HbdaService : IHbdaService
     /// </summary>
     private static (bool IsGaming, double Confidence, string Reason) IsGamingTheSystem(CodeSubmission c, List<CodeSubmission> history)
     {
-        // Must exclude: Paste actions used to copy the student's own prior work
-        bool isPasteOfPriorWork = false;
-        if (c.PasteDetected && history.Count > 0)
+        // Primary gaming indicator: rapid repeated hint requests.
+        // Paste is blocked locally in the editor, so it is no longer used as a
+        // server-side GamingTheSystem classifier.
+        if (c.HintUsageCount > GamingHintRequestMin && c.TaskElapsedSeconds <= GamingHintWindowSeconds)
         {
-            string currentNorm = NormalizeStructure(c.SourceCode);
-            isPasteOfPriorWork = history.Any(h => NormalizeStructure(h.SourceCode) == currentNorm);
-        }
-
-        bool actualPasteDetected = c.PasteDetected && !isPasteOfPriorWork;
-
-        // High Confidence (1.0)
-        if (actualPasteDetected && (c.TaskElapsedSeconds < GamingTaskElapsedMin || c.SubmissionIntervalSeconds < GamingIntervalMax))
-        {
-            return (true, 1.0, $"High Confidence Gaming: paste={actualPasteDetected}, task={c.TaskElapsedSeconds:F0}s, SI={c.SubmissionIntervalSeconds:F1}s");
-        }
-
-        // Moderate Confidence (0.75): Bulk paste followed by minor symbol adjustments
-        var lastSub = history.OrderByDescending(h => h.SubmittedAt).FirstOrDefault();
-        if (lastSub != null && lastSub.PasteDetected && c.EditDistance <= 25 && c.EditDistance > 0)
-        {
-            return (true, 0.75, $"Moderate Confidence Gaming: Minor adjustments after paste. ED={c.EditDistance}");
-        }
-
-        // Low Confidence (0.5): Excessive hint requests (>3 in 60s)
-        if (c.HintUsageCount > 3 && c.TaskElapsedSeconds < 60.0)
-        {
-            return (true, 0.5, $"Low Confidence Gaming: Excessive hints ({c.HintUsageCount}) in {c.TaskElapsedSeconds:F0}s");
+            return (true, 1.0, $"High Confidence Gaming: Excessive hints ({c.HintUsageCount}) in {c.TaskElapsedSeconds:F0}s");
         }
 
         return (false, 0.0, "");
