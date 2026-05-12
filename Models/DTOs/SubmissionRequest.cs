@@ -47,7 +47,10 @@ public class KeystrokePayload
     public double TotalTimeSeconds    { get; set; }
     public List<double[]>? RawEvents  { get; set; }
 
-    /// <summary>True when the client detected a Ctrl+V paste immediately before submit.</summary>
+    /// <summary>
+    /// Deprecated. Paste is blocked client-side and ignored by HBDA because paste
+    /// recording is unreliable across targets.
+    /// </summary>
     public bool PasteDetected { get; set; }
 
     // ── 4-Phase Telemetry ──

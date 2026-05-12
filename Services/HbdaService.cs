@@ -16,7 +16,7 @@ namespace ODIN.Api.Services;
 ///   3. WheelSpinning                — &gt;= 3 consecutive same errors, no structural change
 ///   4. LowProgressTrialAndError     — SI &lt; 6s with character/value cycling or persistent error
 ///   5. HintWithheld                 — SI &gt; 15s AND new/different error
-///   6. ActiveThinking               — SI &gt; 15s AND correct/progressive AND &gt;= 2 consecutive progressive
+///   6. ActiveThinking               — extended pause + productive attempt + high typing coverage + minimal checks + self-corrections
 ///
 /// Learned Helplessness Detection:
 ///   - Indicator #1: Inactivity >= 120s after error
@@ -137,16 +137,12 @@ public class HbdaService : IHbdaService
     private static (bool IsGaming, double Confidence, string Reason) IsGamingTheSystem(
         CodeSubmission c, List<CodeSubmission> history, bool rapidTaskSurfaceWithoutKeys)
     {
-        if (c.PasteDetected)
-            return (true, 0.9, "PasteDetected immediately before submit");
-
         if (rapidTaskSurfaceWithoutKeys
             && c.TotalTimeSeconds <= 5.0
-            && !c.IsCorrect
             && c.KeyDownCount == 0
             && c.HintUsageCount <= GamingHintRequestMin)
         {
-            return (true, 0.72, "Rapid compile (<5s on task) with zero keyboard interaction");
+            return (true, 1.0, "High Confidence Gaming: Rapid compile (<5s on task) with zero keyboard interaction");
         }
 
         // Primary gaming indicator: rapid repeated hint requests.
@@ -713,16 +709,13 @@ public class HbdaService : IHbdaService
     ///   2. Typing burst coverage >= 60%
     ///   3. Single or no system checks (<= 1)
     ///   4. Self-corrections present (> 0)
-    ///   5. >= 2 progressive submissions
+    ///   5. Productive attempt (correct or changed diagnostic direction)
     /// </summary>
     private HbdaResult? EvaluateActiveThinking(
         CodeSubmission current,
         CodeSubmission? previous,
         List<CodeSubmission> sessionHistory)
     {
-        // Must exclude: full external paste
-        if (current.PasteDetected) return null;
-
         if (HasThreePlusConsecutiveSameRuntimeErrors(current, sessionHistory))
             return null;
 
@@ -754,18 +747,11 @@ public class HbdaService : IHbdaService
 
         bool hasTwoProgressive = isCurrentProgressive && isPrevProgressive;
 
-        // At minimum, we need an extended pause OR high typing burst coverage
-        if (!isExtendedPause && !hasHighCoverage) return null;
-
-        // Must be at least progressive
+        if (!isExtendedPause) return null;
         if (!isCurrentProgressive) return null;
-
-        // Exclusion: Single long pause followed by luck or a correct guess without additional progressive submits.
-        // A "correct guess" means low typing burst coverage (not a full typing burst).
-        if (isExtendedPause && !hasTwoProgressive && current.TypingBurstCoverage < TypingBurstCoverageMin)
-        {
-            return null; // Exclude
-        }
+        if (!hasHighCoverage) return null;
+        if (!hasMinimalSystemChecks) return null;
+        if (!hasSelfCorrections) return null;
 
         // Evaluate Confidence
         var (confidenceLevel, delta) = EvaluateActiveThinkingConfidence(
