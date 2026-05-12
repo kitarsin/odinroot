@@ -687,6 +687,7 @@ public class HbdaService : IHbdaService
     /// <summary>Helper to extract numeric literals from source code.</summary>
     private static List<int> ExtractNumericLiterals(string code)
     {
+        if (string.IsNullOrEmpty(code)) return new List<int>();
         var matches = Regex.Matches(code, @"\b(\d+)\b");
         return matches.Cast<Match>().Select(m => int.Parse(m.Groups[1].Value)).ToList();
     }
@@ -800,6 +801,7 @@ public class HbdaService : IHbdaService
     /// Two codes with the same normalized form differ only in numbers/operators.
     private static string NormalizeStructure(string code)
     {
+        if (string.IsNullOrEmpty(code)) return "";
         code = Regex.Replace(code, @"//[^\r\n]*", "", RegexOptions.Multiline);
         code = Regex.Replace(code, @"/\*.*?\*/", "", RegexOptions.Singleline);
         code = Regex.Replace(code, @"\b\d+(\.\d+)?\b", "NUM");
