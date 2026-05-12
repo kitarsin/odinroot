@@ -182,7 +182,7 @@ int seatsPerTable = 2;
 // Print the total number of elements it contains.',
  '32',
  '2DArrayDeclaration', true,
- '[{"find":"new int\\[\\d+, \\d+\\]","replace":"new int[6, 5]","expectedOutput":"30"}]', '["Review the problem carefully.", "Look at previous examples."]')
+ '[{"find":"new int\\[\\s*\\d+\\s*,\\s*\\d+\\s*\\]","replace":"new int[6, 5]","expectedOutput":"30"}]', '["Review the problem carefully.", "Look at previous examples."]')
 ('a0000032-0000-0000-0000-000000000000',
  'The Coordinate Planter',
  'My staff must be planted at a precise coordinate - row 2, column 1 (zero-based)! Assign the value 7 to that position in the pool table and print the stored value to confirm the strike landed.',
@@ -192,7 +192,7 @@ int seatsPerTable = 2;
 // Print the value at that position.',
  '7',
  'MatrixIndexing', true,
- '[{"find":"\\[2, 1\\] = \\d+","replace":"[2, 1] = 15","expectedOutput":"15"}]', '["Review the problem carefully.", "Look at previous examples."]')
+ '[{"find":"\\[\\s*2\\s*,\\s*1\\s*\\]\\s*=\\s*\\d+","replace":"[2, 1] = 15","expectedOutput":"15"}]', '["Review the problem carefully.", "Look at previous examples."]')
 ('a0000033-0000-0000-0000-000000000000',
  'The Span Measurer',
  'The arena has five rows and eight columns - but my instruments must confirm only the horizontal span! Do not use the total element count. Use GetLength to extract just the column dimension and print it.',
@@ -201,7 +201,7 @@ int seatsPerTable = 2;
 // Print the number of columns in the grid using GetLength.',
  '8',
  'DimensionQuery', true,
- '[{"find":"new int\\[5, \\d+\\]","replace":"new int[5, 12]","expectedOutput":"12"}]', '["Review the problem carefully.", "Look at previous examples."]')
+ '[{"find":"new int\\[\\s*5\\s*,\\s*\\d+\\s*\\]","replace":"new int[5, 12]","expectedOutput":"12"}]', '["Review the problem carefully.", "Look at previous examples."]')
 ('a0000034-0000-0000-0000-000000000000',
  'The Null-Fletcher',
  'Every cell in this four-by-three grid must be filled with a value of 1! Use nested loops with GetLength to reach every coordinate. When every cell is filled, sum the entire matrix and print the total.',
@@ -211,7 +211,7 @@ int seatsPerTable = 2;
 // Then print the total sum of all elements in the array.',
  '12',
  'GridPopulation', true,
- '[{"find":"new int\\[\\d+, 3\\]","replace":"new int[2, 3]","expectedOutput":"6"}]', '["Review the problem carefully.", "Look at previous examples."]')
+ '[{"find":"new int\\[\\s*\\d+\\s*,\\s*3\\s*\\]","replace":"new int[2, 3]","expectedOutput":"6"}]', '["Review the problem carefully.", "Look at previous examples."]')
 ('a0000035-0000-0000-0000-000000000000',
  'The Out-of-Bounds Slugger',
  'The matrix has six rows and nine columns - each dimension must be named precisely! Use GetLength to extract the row count from dimension 0 and the column count from dimension 1. Print each on its own line.',
@@ -222,7 +222,7 @@ int seatsPerTable = 2;
 // Each on its own line.',
  E'6\n9',
  'DynamicBoundaries', true,
- '[{"find":"new int\\[\\d+, \\d+\\]","replace":"new int[4, 7]","expectedOutput":"4\n7"}]', '["Review the problem carefully.", "Look at previous examples."]')
+ '[{"find":"new int\\[\\s*\\d+\\s*,\\s*\\d+\\s*\\]","replace":"new int[4, 7]","expectedOutput":"4\n7"}]', '["Review the problem carefully.", "Look at previous examples."]')
 -- ── Level 3: Final Boss ──────────────────────────────────────────────────────
 
 ('a0000099-0000-0000-0000-000000000000',
