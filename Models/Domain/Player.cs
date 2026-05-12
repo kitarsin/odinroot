@@ -19,6 +19,8 @@ public class Player
     public string? AvatarUrl { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public string Achievements { get; set; } = "[]";  // jsonb
+    public string Badges { get; set; } = "[]";        // jsonb
+    public bool PretestCompleted { get; set; } = false;
 
     // ── ODIN-specific columns (added by migration) ──
     public int CurrentLevel { get; set; } = 0;

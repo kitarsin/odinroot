@@ -88,6 +88,7 @@ public class PlayerController : ControllerBase
         player.GameState = "{}";
         player.SyncRate = 0;
         player.Achievements = "[]";
+        player.Badges = "[]";
         player.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();

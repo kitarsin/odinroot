@@ -35,6 +35,8 @@ public class OdinDbContext : DbContext
             e.Property(p => p.AvatarUrl).HasColumnName("avatar_url");
             e.Property(p => p.CreatedAt).HasColumnName("created_at");
             e.Property(p => p.Achievements).HasColumnName("achievements").HasColumnType("jsonb");
+            e.Property(p => p.Badges).HasColumnName("badges").HasColumnType("jsonb");
+            e.Property(p => p.PretestCompleted).HasColumnName("pretest_completed");
             e.Property(p => p.CurrentLevel).HasColumnName("current_level");
             e.Property(p => p.ExperiencePoints).HasColumnName("experience_points");
             e.Property(p => p.HelplessnessScore).HasColumnName("helplessness_score");
