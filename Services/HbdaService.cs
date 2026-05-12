@@ -89,7 +89,12 @@ public class HbdaService : IHbdaService
     {
         var gamingCheck = IsGamingTheSystem(current, sessionHistory);
         if (gamingCheck.IsGaming)
-            return Result(BehaviorState.GamingTheSystem, WeightGaming * gamingCheck.Confidence, gamingCheck.Reason);
+        {
+            var confLevel = gamingCheck.Confidence >= 1.0 ? ConfidenceLevel.High :
+                            gamingCheck.Confidence >= 0.75 ? ConfidenceLevel.Moderate :
+                            ConfidenceLevel.Low;
+            return Result(BehaviorState.GamingTheSystem, WeightGaming * gamingCheck.Confidence, confLevel, gamingCheck.Reason);
+        }
 
         // Enhanced PostFailureDisengagement detection with multiple indicators
         var disengagementResult = EvaluatePostFailureDisengagement(current, previous, sessionHistory, inactivityDuration);
@@ -160,8 +165,94 @@ public class HbdaService : IHbdaService
         return (false, 0.0, "");
     }
 
-    /// PostFailureDisengagement: keyboard idle >= 120s immediately after an error
-    private static bool IsPostFailureDisengagement(CodeSubmission c, CodeSubmission? prev, double inactivityDuration)
+    /// <summary>
+    /// Comprehensive PostFailureDisengagement (Learned Helplessness) detection.
+    /// Evaluates multiple indicators:
+    ///   1. Inactivity >= 120s after error
+    ///   2. Unchanged/near-unchanged resubmission (ED <= 5)
+    ///   3. Identical submissions repeated (2+ with ED == 0)
+    ///
+    /// Returns null if no disengagement detected.
+    /// Applies exclusion logic for false positives (recovery patterns).
+    /// </summary>
+    private HbdaResult? EvaluatePostFailureDisengagement(
+        CodeSubmission current,
+        CodeSubmission? previous,
+        List<CodeSubmission> sessionHistory,
+        double inactivityDuration)
+    {
+        // Only applies to unsuccessful submissions
+        if (current.IsCorrect) return null;
+        
+        // Require previous error as baseline
+        if (previous == null || previous.IsCorrect) return null;
+
+        // Collect evidence of indicators
+        bool indicator1_LongInactivity = inactivityDuration >= DisengagementIntervalMin;
+        bool indicator2_UnchangedEdit = current.EditDistance <= UnchangedResubmissionMaxEd;
+        bool indicator3_IdenticalRepeated = IsIdenticalWorkRepeated(current, sessionHistory);
+
+        // If no indicators present, not disengagement
+        if (!indicator1_LongInactivity && !indicator2_UnchangedEdit && !indicator3_IdenticalRepeated)
+            return null;
+
+        // Check exclusion: Recovery patterns after long pause
+        if (ShouldExcludeAsRecoveryPattern(current, previous, sessionHistory, inactivityDuration))
+            return null;
+
+        // Determine confidence based on indicator strength and count
+        var (confidenceLevel, delta) = EvaluateLearnedHelplessnessConfidence(
+            indicator1_LongInactivity, indicator2_UnchangedEdit, indicator3_IdenticalRepeated);
+
+        var indicatorSummary = GetIndicatorSummary(indicator1_LongInactivity, indicator2_UnchangedEdit, indicator3_IdenticalRepeated);
+        
+        return Result(
+            BehaviorState.PostFailureDisengagement,
+            delta,
+            confidenceLevel,
+            $"PostFailureDisengagement ({confidenceLevel}): {indicatorSummary}");
+    }
+
+    /// <summary>
+    /// Detects if student is repeating identical work with no modifications.
+    /// Indicator #3: 2 or more consecutive submissions where EditDistance == 0
+    /// </summary>
+    private static bool IsIdenticalWorkRepeated(CodeSubmission current, List<CodeSubmission> history)
+    {
+        if (history.Count < 1) return false;
+
+        // Count consecutive identical submissions (working backward from current)
+        int identicalCount = 0;
+        string currentNormalized = NormalizeStructure(current.SourceCode);
+
+        foreach (var submission in history.OrderByDescending(s => s.SubmittedAt))
+        {
+            if (submission.EditDistance == 0 && 
+                NormalizeStructure(submission.SourceCode) == currentNormalized &&
+                !submission.IsCorrect)
+            {
+                identicalCount++;
+            }
+            else
+            {
+                break;  // Stop at first difference
+            }
+        }
+
+        return identicalCount >= IdenticalSubmissionThreshold - 1;  // -1 because we count from history
+    }
+
+    /// <summary>
+    /// Determines if this is a recovery pattern that should exclude PostFailureDisengagement detection.
+    /// 
+    /// Exclusion #1: Pause 60-120s followed by substantive approach (ED >= 10)
+    /// Exclusion #2: Pause followed by strategy pivot and eventual success
+    /// </summary>
+    private static bool ShouldExcludeAsRecoveryPattern(
+        CodeSubmission current,
+        CodeSubmission? previous,
+        List<CodeSubmission> sessionHistory,
+        double inactivityDuration)
     {
         // Exclusion #1: Brief pause (< 120s) even if ED is small = reflection, not helplessness
         if (inactivityDuration < DisengagementIntervalMin)
