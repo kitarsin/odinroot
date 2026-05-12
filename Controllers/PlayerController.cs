@@ -56,43 +56,53 @@ public class PlayerController : ControllerBase
     [HttpPost("{userId:guid}/reset")]
     public async Task<ActionResult> ResetProgress(Guid userId)
     {
-        var player = await _db.Players
-            .Include(p => p.MasteryStates)
-            .FirstOrDefaultAsync(p => p.Id == userId);
-        if (player == null) return NotFound();
+        if (!await _db.Players.AnyAsync(p => p.Id == userId))
+            return NotFound();
 
-        // Delete in FK-safe order so no constraint violations
-        var keystrokeBatches = await _db.KeystrokeRawEventBatches
-            .Where(k => k.UserId == userId).ToListAsync();
-        _db.KeystrokeRawEventBatches.RemoveRange(keystrokeBatches);
+        // Raw SQL in one explicit transaction — avoids EF ExecuteDelete/ExecuteUpdate not always
+        // enlisting in Database.BeginTransactionAsync (Npgsql), and avoids loading huge game_state jsonb.
+        // FK order: keystrokes → interaction_logs → submissions → game_sessions → progress → profiles.
+        // Pretest: do not clear pretest_completed or touch pretest_responses (Supabase); students keep gate + responses.
+        var utc = DateTime.UtcNow;
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        try
+        {
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM public.keystroke_raw_events WHERE user_id = {userId}");
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM public.interaction_logs WHERE user_id = {userId}");
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM public.submissions WHERE user_id = {userId}");
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM public.game_sessions WHERE user_id = {userId}");
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM public.progress WHERE user_id = {userId}");
 
-        var logs = await _db.InteractionLogs
-            .Where(l => l.UserId == userId).ToListAsync();
-        _db.InteractionLogs.RemoveRange(logs);
+            var updated = await _db.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE public.profiles SET
+                    current_level = 0,
+                    experience_points = 0,
+                    helplessness_score = 0,
+                    total_submissions = 0,
+                    game_state = '{{}}'::jsonb,
+                    sync_rate = 0,
+                    achievements = '[]'::jsonb,
+                    updated_at = {utc}
+                WHERE id = {userId}");
+            if (updated != 1)
+            {
+                await tx.RollbackAsync();
+                return NotFound();
+            }
 
-        var submissions = await _db.CodeSubmissions
-            .Where(s => s.UserId == userId).ToListAsync();
-        _db.CodeSubmissions.RemoveRange(submissions);
-
-        var sessions = await _db.GameSessions
-            .Where(s => s.UserId == userId).ToListAsync();
-        _db.GameSessions.RemoveRange(sessions);
-
-        _db.MasteryStates.RemoveRange(player.MasteryStates);
-
-        // Reset all player stats
-        player.CurrentLevel = 0;
-        player.ExperiencePoints = 0;
-        player.HelplessnessScore = 0;
-        player.TotalSubmissions = 0;
-        player.GameState = "{}";
-        player.SyncRate = 0;
-        player.Achievements = "[]";
-        player.Badges = "[]";
-        player.UpdatedAt = DateTime.UtcNow;
-
-        await _db.SaveChangesAsync();
-        return NoContent();
+            await tx.CommitAsync();
+            return NoContent();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
     }
 
     [HttpGet("{userId:guid}/history")]

@@ -2,10 +2,9 @@ namespace ODIN.Api.Models.Domain;
 
 /// <summary>
 /// Maps to the existing `profiles` table in Supabase.
-/// Original columns are preserved; ODIN-specific columns are added alongside them.
 ///
-/// Original: id, student_id, full_name, section, role, sync_rate, avatar_url, created_at, achievements
-/// Added:    current_level, experience_points, helplessness_score, total_submissions, updated_at
+/// Columns: id, student_id, full_name, section, role, sync_rate, avatar_url, created_at, achievements,
+/// current_level, experience_points, helplessness_score, total_submissions, updated_at, pretest_completed, game_state.
 /// </summary>
 public class Player
 {
@@ -19,7 +18,6 @@ public class Player
     public string? AvatarUrl { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public string Achievements { get; set; } = "[]";  // jsonb
-    public string Badges { get; set; } = "[]";        // jsonb
     public bool PretestCompleted { get; set; } = false;
 
     // ── ODIN-specific columns (added by migration) ──

@@ -35,7 +35,6 @@ public class OdinDbContext : DbContext
             e.Property(p => p.AvatarUrl).HasColumnName("avatar_url");
             e.Property(p => p.CreatedAt).HasColumnName("created_at");
             e.Property(p => p.Achievements).HasColumnName("achievements").HasColumnType("jsonb");
-            e.Property(p => p.Badges).HasColumnName("badges").HasColumnType("jsonb");
             e.Property(p => p.PretestCompleted).HasColumnName("pretest_completed");
             e.Property(p => p.CurrentLevel).HasColumnName("current_level");
             e.Property(p => p.ExperiencePoints).HasColumnName("experience_points");
@@ -179,7 +178,7 @@ public class OdinDbContext : DbContext
             e.Property(p => p.ArrayConcept).HasColumnName("array_concept");
             e.Property(p => p.IsActive).HasColumnName("is_active");
             e.Property(p => p.TestCases).HasColumnName("test_cases").HasColumnType("jsonb");
-            e.Property(p => p.Hints).HasColumnName("hints").HasColumnType("jsonb");
+            e.Ignore(p => p.Hints); // not present on public.puzzles in current Supabase schema
             e.HasIndex(p => new { p.DungeonLevel, p.OrderIndex });
         });
     }
