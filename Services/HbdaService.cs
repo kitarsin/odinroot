@@ -58,6 +58,11 @@ public class HbdaService : IHbdaService
     private const double ReflectionPauseMin       = 15.0;  // Pause > 15s indicates reflection
     private const int    LowProgressMaxEditDistance = 25;   // Max ED for symbol cycling
 
+    // ─── Active Thinking Detection ───
+    private const double PreTaskPauseMin          = 10.0;  // Initial latency >= 10s
+    private const double TypingBurstCoverageMin   = 0.60;  // >= 60% task coverage
+    private const int    MaxSystemChecks          = 1;     // <= 1 system checks
+
     // ─── Weights (Helplessness Score Delta) ───
     private const double WeightGaming               = 20.0;
     private const double WeightDisengagementHigh    = 20.0;   // Multiple indicators or 120s+ proof
@@ -68,7 +73,10 @@ public class HbdaService : IHbdaService
     private const double WeightTinkeringModerate     = 6.0;   // Single indicator (60% weight)
     private const double WeightTinkeringLow          = 3.0;   // Weak evidence (30% weight)
     private const double WeightHintWithheld          = -5.0;
-    private const double WeightActiveThinking        = -10.0;
+    
+    private const double WeightActiveThinkingHigh     = -20.0;
+    private const double WeightActiveThinkingModerate = -12.0;
+    private const double WeightActiveThinkingLow      = -8.0;
 
 
     public HbdaResult Classify(
@@ -99,9 +107,10 @@ public class HbdaService : IHbdaService
             return Result(BehaviorState.HintWithheld, WeightHintWithheld, ConfidenceLevel.Moderate,
                 $"HintWithheld: SI={current.SubmissionIntervalSeconds:F1}s, new error type");
 
-        if (IsActiveThinking(current, previous, sessionHistory))
-            return Result(BehaviorState.ActiveThinking, WeightActiveThinking, ConfidenceLevel.High,
-                $"ActiveThinking: SI={current.SubmissionIntervalSeconds:F1}s, progressive/correct, >= 2 consecutive");
+        // Enhanced ActiveThinking detection with multiple indicators
+        var thinkingResult = EvaluateActiveThinking(current, previous, sessionHistory);
+        if (thinkingResult != null)
+            return thinkingResult;
 
         return Result(BehaviorState.LowProgressTrialAndError, WeightTinkeringLow * 0.5, ConfidenceLevel.Low,
             "No clear pattern — mild low-progress default");
@@ -563,22 +572,96 @@ public class HbdaService : IHbdaService
         return c.DiagnosticCategory != prev.DiagnosticCategory;
     }
 
-    /// ActiveThinking: SI > 15s AND (correct or progressive) AND >= 2 consecutive progressive
-    private static bool IsActiveThinking(CodeSubmission c, CodeSubmission? prev, List<CodeSubmission> history)
+    /// <summary>
+    /// Comprehensive ActiveThinking detection.
+    /// Evaluates multiple indicators:
+    ///   1. Pre-task pause >= 10s OR SI > 15s
+    ///   2. Typing burst coverage >= 60%
+    ///   3. Single or no system checks (<= 1)
+    ///   4. Self-corrections present (> 0)
+    ///   5. >= 2 progressive submissions
+    /// </summary>
+    private HbdaResult? EvaluateActiveThinking(
+        CodeSubmission current,
+        CodeSubmission? previous,
+        List<CodeSubmission> sessionHistory)
     {
-        if (c.SubmissionIntervalSeconds <= ThinkingIntervalMin) return false;
+        // Must exclude: full external paste
+        if (current.PasteDetected) return null;
 
-        bool currentProgressive = c.IsCorrect
-            || (prev != null && c.DiagnosticCategory != prev.DiagnosticCategory);
-        if (!currentProgressive) return false;
+        bool isExtendedPause = current.SubmissionIntervalSeconds > ThinkingIntervalMin || 
+                               (current.InitialLatencyMs / 1000.0) >= PreTaskPauseMin;
+        
+        bool hasHighCoverage = current.TypingBurstCoverage >= TypingBurstCoverageMin;
+        bool hasMinimalSystemChecks = current.SystemCheckCount <= MaxSystemChecks;
+        bool hasSelfCorrections = current.SelfCorrectionCount > 0;
+        
+        bool isCurrentProgressive = current.IsCorrect || 
+            (previous != null && current.DiagnosticCategory != previous.DiagnosticCategory);
 
-        // Previous submission must also have been progressive
-        if (prev == null || history.Count < 2) return false;
-        var beforePrev = history.OrderByDescending(h => h.SubmittedAt).Skip(1).FirstOrDefault();
-        bool prevProgressive = prev.IsCorrect
-            || (beforePrev != null && prev.DiagnosticCategory != beforePrev.DiagnosticCategory);
+        // Previous submission must also have been progressive for indicator
+        bool isPrevProgressive = false;
+        if (previous != null && sessionHistory.Count >= 2)
+        {
+            var beforePrev = sessionHistory.OrderByDescending(h => h.SubmittedAt).Skip(1).FirstOrDefault();
+            isPrevProgressive = previous.IsCorrect || 
+                (beforePrev != null && previous.DiagnosticCategory != beforePrev.DiagnosticCategory);
+        }
 
-        return prevProgressive;
+        bool hasTwoProgressive = isCurrentProgressive && isPrevProgressive;
+
+        // At minimum, we need an extended pause OR high typing burst coverage
+        if (!isExtendedPause && !hasHighCoverage) return null;
+
+        // Must be at least progressive
+        if (!isCurrentProgressive) return null;
+
+        // Exclusion: Single long pause followed by luck or a correct guess without additional progressive submits.
+        // A "correct guess" means low typing burst coverage (not a full typing burst).
+        if (isExtendedPause && !hasTwoProgressive && current.TypingBurstCoverage < TypingBurstCoverageMin)
+        {
+            return null; // Exclude
+        }
+
+        // Evaluate Confidence
+        var (confidenceLevel, delta) = EvaluateActiveThinkingConfidence(
+            isExtendedPause, hasHighCoverage, hasTwoProgressive, hasMinimalSystemChecks, hasSelfCorrections, current.IsCorrect);
+
+        var indicatorSummary = GetActiveThinkingIndicatorSummary(isExtendedPause, hasHighCoverage, hasTwoProgressive, hasMinimalSystemChecks, hasSelfCorrections);
+
+        return Result(
+            BehaviorState.ActiveThinking,
+            delta,
+            confidenceLevel,
+            $"ActiveThinking ({confidenceLevel}): {indicatorSummary}");
+    }
+
+    private static (ConfidenceLevel, double) EvaluateActiveThinkingConfidence(
+        bool isExtendedPause, bool hasHighCoverage, bool hasTwoProgressive, 
+        bool hasMinimalSystemChecks, bool hasSelfCorrections, bool isCorrect)
+    {
+        // HIGH if Extended pause, at least 2 progressive submits, single typing burst, and correct or near-correct outcome.
+        if (isExtendedPause && hasTwoProgressive && hasHighCoverage)
+            return (ConfidenceLevel.High, WeightActiveThinkingHigh);
+
+        // MODERATE if Pauses present but session is fragmented or outcome is incorrect.
+        if (isExtendedPause && (!hasHighCoverage || !isCorrect))
+            return (ConfidenceLevel.Moderate, WeightActiveThinkingModerate);
+
+        // LOW if Indicators partially present with ambiguous outcome.
+        return (ConfidenceLevel.Low, WeightActiveThinkingLow);
+    }
+
+    private static string GetActiveThinkingIndicatorSummary(
+        bool pause, bool coverage, bool prog, bool sysChecks, bool selfCorr)
+    {
+        var parts = new List<string>();
+        if (pause) parts.Add("ExtendedPause");
+        if (coverage) parts.Add("Burst>=60%");
+        if (prog) parts.Add(">=2Progressive");
+        if (sysChecks) parts.Add("MinimalSysChecks");
+        if (selfCorr) parts.Add("SelfCorrections");
+        return string.Join(" + ", parts);
     }
 
     // ═══════════════════════════════════════════════════════════
