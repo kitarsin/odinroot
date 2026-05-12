@@ -265,7 +265,11 @@ public class SubmissionController : ControllerBase
                 }
 
                 interventionResult = string.IsNullOrWhiteSpace(hintText)
-                    ? new InterventionResult { Type = InterventionType.None }
+                    ? new InterventionResult 
+                      { 
+                          Type = InterventionType.ScaffoldingHint,
+                          NpcDialogue = new NpcDialogueDto { DialogueText = "No hints available for this puzzle." }
+                      }
                     : new InterventionResult
                     {
                         Type = InterventionType.ScaffoldingHint,
