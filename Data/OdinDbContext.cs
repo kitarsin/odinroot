@@ -181,7 +181,7 @@ public class OdinDbContext : DbContext
             e.Property(p => p.ArrayConcept).HasColumnName("array_concept");
             e.Property(p => p.IsActive).HasColumnName("is_active");
             e.Property(p => p.TestCases).HasColumnName("test_cases").HasColumnType("jsonb");
-            e.Ignore(p => p.Hints); // not present on public.puzzles in current Supabase schema
+            e.Property(p => p.Hints).HasColumnName("hints").HasColumnType("jsonb");
             e.HasIndex(p => new { p.DungeonLevel, p.OrderIndex });
         });
     }

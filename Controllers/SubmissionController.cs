@@ -244,6 +244,7 @@ public class SubmissionController : ControllerBase
             else
             {
                 string hintText = string.Empty;
+                _logger.LogInformation("Puzzle Hints from DB: '{Hints}'", puzzle?.Hints);
                 if (!string.IsNullOrWhiteSpace(puzzle?.Hints))
                 {
                     try
@@ -252,6 +253,7 @@ public class SubmissionController : ControllerBase
                         if (hintsArray != null && hintsArray.Count > 0)
                         {
                             int hintIndex = request.HintUsageCount - 1;
+                            _logger.LogInformation("HintUsageCount: {Count}, hintIndex: {Index}, Array Count: {ArrayCount}", request.HintUsageCount, hintIndex, hintsArray.Count);
                             if (hintIndex >= 0 && hintIndex < hintsArray.Count)
                             {
                                 hintText = hintsArray[hintIndex];
