@@ -211,7 +211,7 @@ public class SubmissionController : ControllerBase
             }
             else
             {
-                string hintText = "No additional hints available.";
+                string hintText = string.Empty;
                 if (!string.IsNullOrWhiteSpace(puzzle?.Hints))
                 {
                     try
@@ -219,9 +219,11 @@ public class SubmissionController : ControllerBase
                         var hintsArray = JsonSerializer.Deserialize<List<string>>(puzzle.Hints);
                         if (hintsArray != null && hintsArray.Count > 0)
                         {
-                            int hintIndex = Math.Max(0, request.HintUsageCount - 1);
-                            hintIndex = Math.Min(hintIndex, hintsArray.Count - 1);
-                            hintText = hintsArray[hintIndex];
+                            int hintIndex = request.HintUsageCount - 1;
+                            if (hintIndex >= 0 && hintIndex < hintsArray.Count)
+                            {
+                                hintText = hintsArray[hintIndex];
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -230,11 +232,13 @@ public class SubmissionController : ControllerBase
                     }
                 }
 
-                interventionResult = new InterventionResult
-                {
-                    Type = InterventionType.ScaffoldingHint,
-                    NpcDialogue = new NpcDialogueDto { DialogueText = hintText }
-                };
+                interventionResult = string.IsNullOrWhiteSpace(hintText)
+                    ? new InterventionResult { Type = InterventionType.None }
+                    : new InterventionResult
+                    {
+                        Type = InterventionType.ScaffoldingHint,
+                        NpcDialogue = new NpcDialogueDto { DialogueText = hintText }
+                    };
             }
         }
         else
