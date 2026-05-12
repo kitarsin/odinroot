@@ -68,7 +68,9 @@ public class HbdaService : IHbdaService
     private const double WeightDisengagementHigh    = 20.0;   // Multiple indicators or 120s+ proof
     private const double WeightDisengagementModerate = 12.0;  // 60% weight for single indicator
     private const double WeightDisengagementLow      = 8.0;   // 40% weight for weak evidence
-    private const double WeightWheelSpinning         = 15.0;
+    private const double WeightWheelSpinningHigh     = 15.0;
+    private const double WeightWheelSpinningModerate = 10.0;
+    private const double WeightWheelSpinningLow      = 5.0;
     private const double WeightTinkeringHigh         = 10.0;  // Multiple rapid/cycling indicators
     private const double WeightTinkeringModerate     = 6.0;   // Single indicator (60% weight)
     private const double WeightTinkeringLow          = 3.0;   // Weak evidence (30% weight)
@@ -94,9 +96,10 @@ public class HbdaService : IHbdaService
         if (disengagementResult != null)
             return disengagementResult;
 
-        if (IsWheelSpinning(current, previous, sessionHistory))
-            return Result(BehaviorState.WheelSpinning, WeightWheelSpinning, ConfidenceLevel.High,
-                $"WheelSpinning: >=3 consecutive {current.DiagnosticCategory} errors, no structural change");
+        // Enhanced WheelSpinning detection with multiple indicators
+        var wheelSpinningResult = EvaluateWheelSpinning(current, previous, sessionHistory);
+        if (wheelSpinningResult != null)
+            return wheelSpinningResult;
 
         // Enhanced LowProgressTrialAndError (Tinkering) detection with multiple indicators
         var tinkeringResult = EvaluateTinkering(current, previous, sessionHistory);
@@ -222,20 +225,109 @@ public class HbdaService : IHbdaService
         return string.Join(" + ", parts);
     }
 
-    /// WheelSpinning: >= 3 consecutive submissions share the same DiagnosticCategory AND no structural change
-    private static bool IsWheelSpinning(CodeSubmission c, CodeSubmission? prev, List<CodeSubmission> history)
+    /// <summary>
+    /// Comprehensive Wheel-Spinning detection.
+    /// Evaluates multiple indicators:
+    ///   1. 3+ consecutive identical errors AND no structural change
+    ///   2. 5+ compile attempts without structural change
+    ///   3. Escalating pause durations between identical actions
+    ///   4. Session ends without correct outcome
+    /// </summary>
+    private HbdaResult? EvaluateWheelSpinning(CodeSubmission current, CodeSubmission? previous, List<CodeSubmission> sessionHistory)
     {
-        if (prev == null || history.Count < 2) return false;
-        if (c.IsCorrect) return false;
+        if (current.IsCorrect) return null;
 
-        // Last 2 in history + current must all have the same diagnostic category
-        var last2 = history.OrderByDescending(h => h.SubmittedAt).Take(2).ToList();
-        bool sameError = last2.All(h => h.DiagnosticCategory == c.DiagnosticCategory)
-                         && c.DiagnosticCategory != "None";
-        if (!sameError) return false;
+        // Exclusion: Rapid character changes (SI < 6s) -> handled by Tinkering
+        if (current.SubmissionIntervalSeconds < TinkeringIntervalMax) return null;
 
-        // No structural change between current and previous
-        return NormalizeStructure(c.SourceCode) == NormalizeStructure(prev.SourceCode);
+        // "Session ends" -> Check if SourceCode is empty or SKIP.
+        bool isSessionEnds = string.IsNullOrWhiteSpace(current.SourceCode) || current.SourceCode == "SKIP";
+
+        string currentNorm = NormalizeStructure(current.SourceCode);
+
+        // Indicator 1: 3 or more consecutive identical errors AND no structural change
+        bool ind1_3ErrorsNoStructChange = false;
+        if (sessionHistory.Count >= 2 && current.DiagnosticCategory != "None")
+        {
+            var last2 = sessionHistory.OrderByDescending(h => h.SubmittedAt).Take(2).ToList();
+            bool sameError = last2.All(h => h.DiagnosticCategory == current.DiagnosticCategory);
+            bool noStructChange = last2.All(h => NormalizeStructure(h.SourceCode) == currentNorm);
+            ind1_3ErrorsNoStructChange = sameError && noStructChange;
+        }
+
+        // Indicator 2: 5 or more compile attempts without structural change
+        bool ind2_5CompilesNoStructChange = false;
+        if (sessionHistory.Count >= 4)
+        {
+            var last4 = sessionHistory.OrderByDescending(h => h.SubmittedAt).Take(4).ToList();
+            ind2_5CompilesNoStructChange = last4.All(h => NormalizeStructure(h.SourceCode) == currentNorm);
+        }
+
+        // Indicator 3: Escalating pause durations between identical actions
+        bool ind3_EscalatingPauses = false;
+        if (sessionHistory.Count >= 2)
+        {
+            var recent = sessionHistory.OrderByDescending(h => h.SubmittedAt).Take(2).ToList();
+            var prev1 = recent[0];
+            var prev2 = recent[1];
+            
+            if (current.SubmissionIntervalSeconds > prev1.SubmissionIntervalSeconds && 
+                prev1.SubmissionIntervalSeconds > prev2.SubmissionIntervalSeconds)
+            {
+                if (NormalizeStructure(prev1.SourceCode) == currentNorm && NormalizeStructure(prev2.SourceCode) == currentNorm)
+                {
+                    ind3_EscalatingPauses = true;
+                }
+            }
+        }
+
+        // Indicator 4: Session ends without correct outcome
+        bool ind4_SessionEnds = isSessionEnds && !sessionHistory.Any(s => s.IsCorrect);
+
+        if (!ind1_3ErrorsNoStructChange && !ind2_5CompilesNoStructChange && !ind3_EscalatingPauses && !ind4_SessionEnds)
+            return null;
+
+        // Exclusion: New approach (ED >= 10 and structural change)
+        if (current.EditDistance >= 10 && previous != null && currentNorm != NormalizeStructure(previous.SourceCode))
+            return null;
+
+        // Determine confidence
+        var (confidenceLevel, delta) = EvaluateWheelSpinningConfidence(
+            ind1_3ErrorsNoStructChange, ind2_5CompilesNoStructChange, ind3_EscalatingPauses, ind4_SessionEnds);
+
+        var indicatorSummary = GetWheelSpinningIndicatorSummary(
+            ind1_3ErrorsNoStructChange, ind2_5CompilesNoStructChange, ind3_EscalatingPauses, ind4_SessionEnds);
+
+        return Result(
+            BehaviorState.WheelSpinning,
+            delta,
+            confidenceLevel,
+            $"WheelSpinning ({confidenceLevel}): {indicatorSummary}");
+    }
+
+    private static (ConfidenceLevel, double) EvaluateWheelSpinningConfidence(
+        bool ind1, bool ind2, bool ind3, bool ind4)
+    {
+        // HIGH: System-logged identical error sequence plus no structural change
+        if (ind1)
+            return (ConfidenceLevel.High, WeightWheelSpinningHigh);
+
+        // MODERATE: Pattern partially visible from behavioral summary only (e.g. 5+ compiles or escalating pauses)
+        if (ind2 || ind3)
+            return (ConfidenceLevel.Moderate, WeightWheelSpinningModerate);
+
+        // LOW: Session ends, single error plus long pause without supporting evidence.
+        return (ConfidenceLevel.Low, WeightWheelSpinningLow);
+    }
+
+    private static string GetWheelSpinningIndicatorSummary(bool ind1, bool ind2, bool ind3, bool ind4)
+    {
+        var parts = new List<string>();
+        if (ind1) parts.Add("3+ErrorsNoStructChange");
+        if (ind2) parts.Add("5+CompilesNoStructChange");
+        if (ind3) parts.Add("EscalatingPauses");
+        if (ind4) parts.Add("SessionEndsWithoutSuccess");
+        return string.Join(" + ", parts);
     }
 
     /// <summary>
