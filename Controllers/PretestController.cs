@@ -70,7 +70,7 @@ public class PretestController : ControllerBase
 
         string? actualOutput = null;
 
-        if (diagnostic.IsCorrect)
+        if (!diagnostic.CompilerDiagnostics.Any())
         {
             if (!ExpectedOutputs.TryGetValue(request.ProblemId ?? "", out var expected))
             {
@@ -85,9 +85,12 @@ public class PretestController : ControllerBase
 
                 if (actualOutput == null)
                 {
-                    diagnostic.IsCorrect = false;
-                    diagnostic.Category  = DiagnosticCategory.GenericLogicError;
-                    diagnostic.Message   = "Your code could not be executed. Check for infinite loops, excessive output, or unsupported operations.";
+                    if (diagnostic.IsCorrect)
+                    {
+                        diagnostic.IsCorrect = false;
+                        diagnostic.Category  = DiagnosticCategory.GenericLogicError;
+                        diagnostic.Message   = "Your code could not be executed. Check for infinite loops, excessive output, or unsupported operations.";
+                    }
                 }
                 else if (Normalize(actualOutput) != Normalize(expected))
                 {
@@ -95,7 +98,7 @@ public class PretestController : ControllerBase
                     diagnostic.Category  = DiagnosticCategory.GenericLogicError;
                     diagnostic.Message   = string.IsNullOrWhiteSpace(actualOutput)
                         ? "Your code produced no output. Make sure you have a Console.WriteLine with the correct value."
-                        : "Your output does not match the expected result. Review your logic.";
+                        : $"Your output ('{actualOutput.Trim()}') does not match the expected result. Review your logic.";
                 }
                 else if (SecondaryTests.TryGetValue(request.ProblemId!, out var sec))
                 {
