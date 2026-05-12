@@ -81,8 +81,7 @@ public class SubmissionController : ControllerBase
         //   • Code wasn't flagged as unchanged starter (nothing to execute meaningfully)
         //   • No Roslyn compile errors (broken code can't run)
         //   • Puzzle has expected output recorded in the DB
-        if (diagnosticResult.Category != DiagnosticCategory.UnchangedStarterCode
-            && !diagnosticResult.CompilerDiagnostics.Any()
+        if (diagnosticResult.IsCorrect
             && puzzle?.ExpectedOutput is { Length: > 0 } expectedOut)
         {
             var actualOutput = await _codeExecution.ExecuteAsync(request.SourceCode);

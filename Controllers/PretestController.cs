@@ -70,7 +70,7 @@ public class PretestController : ControllerBase
 
         string? actualOutput = null;
 
-        if (!diagnostic.CompilerDiagnostics.Any())
+        if (diagnostic.IsCorrect)
         {
             if (!ExpectedOutputs.TryGetValue(request.ProblemId ?? "", out var expected))
             {
