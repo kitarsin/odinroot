@@ -27,6 +27,9 @@ public class CodeSubmission
     public double AverageDwellTimeMs { get; set; }
     public double InitialLatencyMs { get; set; }
     public double TotalTimeSeconds { get; set; }
+    public double TypingBurstCoverage { get; set; }
+    public int SystemCheckCount { get; set; }
+    public int SelfCorrectionCount { get; set; }
 
     // HBDA metrics
     public int EditDistance { get; set; }
