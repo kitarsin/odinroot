@@ -98,7 +98,7 @@ public class PretestController : ControllerBase
                     diagnostic.Category  = DiagnosticCategory.GenericLogicError;
                     diagnostic.Message   = string.IsNullOrWhiteSpace(actualOutput)
                         ? "Your code produced no output. Make sure you have a Console.WriteLine with the correct value."
-                        : $"Your output ('{actualOutput.Trim()}') does not match the expected result. Review your logic.";
+                        : $"Your output does not match the expected result.\n\n[ ACTUAL OUTPUT ]\n{Normalize(actualOutput)}\n\nReview your logic.";
                 }
                 else if (SecondaryTests.TryGetValue(request.ProblemId!, out var sec))
                 {
