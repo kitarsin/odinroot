@@ -35,6 +35,100 @@ public class SubmissionController : ControllerBase
         _codeExecution = codeExecution; _bkt = bkt; _affectiveState = affectiveState;
         _interventionController = interventionController; _logger = logger;
     }
+[HttpPost("reevaluate")]
+    public async Task<IActionResult> ReevaluateDatabase([FromBody] JsonElement document)
+    {
+        try
+        {
+            await _db.Database.ExecuteSqlRawAsync("DELETE FROM progress");
+            await _db.Database.ExecuteSqlRawAsync("DELETE FROM interaction_logs");
+            await _db.Database.ExecuteSqlRawAsync("UPDATE profiles SET helplessness_score = 0");
+
+            int submissionsUpdated = 0;
+
+            foreach (var studentNode in document.EnumerateArray())
+            {
+                if (!studentNode.TryGetProperty("sessions", out var sessionsNode)) continue;
+
+                foreach (var sessionNode in sessionsNode.EnumerateArray())
+                {
+                    if (!sessionNode.TryGetProperty("submissions", out var subsNode)) continue;
+
+                    foreach (var subNode in subsNode.EnumerateArray())
+                    {
+                        var subIdStr = subNode.GetProperty("id").GetString();
+                        if (string.IsNullOrEmpty(subIdStr) || !Guid.TryParse(subIdStr, out var subId)) continue;
+
+                        var dbSub = await _db.CodeSubmissions.FirstOrDefaultAsync(s => s.Id == subId);
+                        if (dbSub == null) continue;
+
+                        string behaviorStr = subNode.GetProperty("behaviorState").GetString() ?? "LowProgressTrialAndError";
+                        double interval = subNode.GetProperty("submissionIntervalSeconds").GetDouble();
+                        double totalTime = subNode.GetProperty("totalTimeSeconds").GetDouble();
+
+                        dbSub.BehaviorState = behaviorStr;
+                        dbSub.SubmissionIntervalSeconds = interval;
+                        dbSub.TotalTimeSeconds = totalTime;
+
+                        if (!Enum.TryParse<BehaviorState>(behaviorStr, out var stateEnum))
+                        {
+                            stateEnum = BehaviorState.LowProgressTrialAndError;
+                        }
+
+                        double delta = stateEnum switch
+                        {
+                            BehaviorState.GamingTheSystem => 20.0,
+                            BehaviorState.PostFailureDisengagement => 20.0,
+                            BehaviorState.WheelSpinning => 15.0,
+                            BehaviorState.LowProgressTrialAndError => 10.0,
+                            BehaviorState.HintWithheld => -5.0,
+                            BehaviorState.ActiveThinking => -20.0,
+                            _ => 0.0
+                        };
+
+                        var hbdaResult = new HbdaResult
+                        {
+                            State = stateEnum,
+                            HelplessnessScoreDelta = delta
+                        };
+
+                        var player = await _db.Players.FirstOrDefaultAsync(p => p.Id == dbSub.UserId);
+                        if (player == null) continue;
+
+                        var bktResult = await _bkt.UpdateMasteryAsync(player.Id, dbSub.SkillType ?? "Unknown", dbSub.IsCorrect);
+
+                        var affectiveResult = _affectiveState.Evaluate(hbdaResult, bktResult, player.HelplessnessScore);
+                        player.HelplessnessScore = affectiveResult.UpdatedHelplessnessScore;
+
+                        var iLog = new InteractionLog
+                        {
+                            UserId = player.Id,
+                            SubmissionId = dbSub.Id,
+                            BehaviorState = behaviorStr,
+                            HelplessnessScoreDelta = delta,
+                            CumulativeHelplessnessScore = affectiveResult.UpdatedHelplessnessScore,
+                            MasteryProbability = bktResult.ProbabilityMastery,
+                            InterventionTriggered = dbSub.InterventionType ?? "None",
+                            DiagnosticCategory = dbSub.DiagnosticCategory ?? "None",
+                            SkillType = dbSub.SkillType ?? "Unknown",
+                            Timestamp = dbSub.SubmittedAt
+                        };
+                        _db.InteractionLogs.Add(iLog);
+
+                        submissionsUpdated++;
+                    }
+                }
+            }
+
+            await _db.SaveChangesAsync();
+
+            return Ok(new { message = $"Successfully wiped state and re-evaluated {submissionsUpdated} submissions." });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
+        }
+    }
 
     [HttpPost]
     public async Task<ActionResult<SubmissionResponse>> Submit([FromBody] SubmissionRequest request)
