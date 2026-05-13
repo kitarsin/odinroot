@@ -137,6 +137,11 @@ public class HbdaService : IHbdaService
     private static (bool IsGaming, double Confidence, string Reason) IsGamingTheSystem(
         CodeSubmission c, List<CodeSubmission> history, bool rapidTaskSurfaceWithoutKeys)
     {
+        if (c.TaskBypassedDuration.HasValue && c.TaskBypassedDuration.Value < 15.0)
+        {
+            return (true, 1.0, $"High Confidence Gaming: Task bypassed in {c.TaskBypassedDuration.Value:F1}s");
+        }
+
         // Primary and only gaming indicator: rapid repeated hint requests.
         // Paste is blocked locally in the editor, and rapid compiles are handled
         // by the normal low-progress/tinkering path instead of GamingTheSystem.

@@ -79,6 +79,7 @@ public class KeystrokePayload
     /// <summary>Backspace/delete-driven corrections in this attempt (client).</summary>
     public int SelfCorrectionCount { get; set; }
 
+
     /// <summary>
     /// “Compile checks” without substantive edits — client hint or server fallback from identical resubmits.
     /// </summary>
@@ -92,6 +93,9 @@ public class KeystrokePayload
 
     /// <summary>Key-down events in this attempt (client); used for rapid-dismiss / zero-interaction checks.</summary>
     public int KeyDownCount { get; set; }
+
+    /// <summary>Null if no task bypass was recorded. If < 15.0s, flagged as GamingTheSystem.</summary>
+    public float? TaskBypassedDuration { get; set; }
 }
 
 /// <summary>

@@ -199,6 +199,7 @@ public class SubmissionController : ControllerBase
             ? request.KeystrokeData.KeyDownCount
             : SubmissionTelemetryHelper.CountKeyDowns(rawEvents);
         submission.KeyDownCount = keyDownCount;
+        submission.TaskBypassedDuration = request.KeystrokeData.TaskBypassedDuration;
 
         var identicalTrail = SubmissionTelemetryHelper.CountTrailingIdenticalCompileChecks(
             sessionHistory, request.SourceCode, NormalizeCode);
@@ -462,6 +463,7 @@ public class SubmissionController : ControllerBase
         submission.KeyDownCount = request.KeystrokeData.KeyDownCount > 0
             ? request.KeystrokeData.KeyDownCount
             : SubmissionTelemetryHelper.CountKeyDowns(request.KeystrokeData.RawEvents);
+        submission.TaskBypassedDuration = request.KeystrokeData.TaskBypassedDuration;
 
         var hbdaResult = _hbda.Classify(
             submission,

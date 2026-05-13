@@ -42,6 +42,9 @@ public class CodeSubmission
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public int KeyDownCount { get; set; }
 
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public float? TaskBypassedDuration { get; set; }
+
     // AST diagnosis
     public string DiagnosticCategory { get; set; } = "None";
     public string? DiagnosticMessage { get; set; }
