@@ -54,6 +54,7 @@ public interface IBktService
 public class BktResult
 {
     public double ProbabilityMastery { get; set; }
+    public int MasteryPercentage { get; set; }
     public bool IsMastered { get; set; }
     public bool IsWarmUpPhase { get; set; }
     public int AttemptCount { get; set; }

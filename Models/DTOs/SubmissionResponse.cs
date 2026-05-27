@@ -43,6 +43,9 @@ public class SubmissionResponse
     /// <summary>Current P(L) — probability of mastery for the tested skill.</summary>
     public double MasteryProbability { get; set; }
 
+    /// <summary>MasteryProbability expressed as a 0-100 integer for display.</summary>
+    public int MasteryPercentage { get; set; }
+
     /// <summary>Whether the student has achieved mastery (P(L) >= 0.90).</summary>
     public bool IsMastered { get; set; }
 

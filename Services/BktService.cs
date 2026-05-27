@@ -60,6 +60,7 @@ public class BktService : IBktService
                 mastery.ProbabilityMastery = pLGiven + (1.0 - pLGiven) * P_T;
             }
             mastery.ProbabilityMastery = Math.Clamp(mastery.ProbabilityMastery, 0.0, 1.0);
+            mastery.MasteryPercentage  = (int)Math.Round(mastery.ProbabilityMastery * 100);
         }
 
         mastery.ConsecutiveCorrect = isCorrect ? mastery.ConsecutiveCorrect + 1 : 0;
@@ -71,9 +72,10 @@ public class BktService : IBktService
         return new BktResult
         {
             ProbabilityMastery = mastery.ProbabilityMastery,
-            IsMastered = mastery.IsMastered,
-            IsWarmUpPhase = isWarmUp,
-            AttemptCount = mastery.AttemptCount,
+            MasteryPercentage  = mastery.MasteryPercentage,
+            IsMastered         = mastery.IsMastered,
+            IsWarmUpPhase      = isWarmUp,
+            AttemptCount       = mastery.AttemptCount,
             ConsecutiveCorrect = mastery.ConsecutiveCorrect
         };
     }
