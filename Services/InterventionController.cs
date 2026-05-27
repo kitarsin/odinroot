@@ -56,13 +56,26 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
 
         // ── Phase 1 Baseline Guard ──
         // First submission establishes the baseline - never trigger regular dialogue.
+        // Level unlocks are still allowed here: mastery may cross the threshold on the
+        // first submission of a new session if prior sessions built the BKT state near
+        // the threshold (e.g. 4 of 5 consecutive correct from a previous session).
         if (isFirstSubmission)
         {
             if (bktResult.IsMastered && diagnosticResult.IsCorrect)
-                result.XpAwarded = XpCorrectAnswer + XpMasteryBonus;
+            {
+                result.Type        = InterventionType.LevelUnlock;
+                result.LevelUnlocked = true;
+                result.XpAwarded   = XpCorrectAnswer + XpMasteryBonus;
+            }
             else if (diagnosticResult.IsCorrect)
+            {
+                result.Type      = InterventionType.None;
                 result.XpAwarded = XpCorrectAnswer;
-            result.Type = InterventionType.None;
+            }
+            else
+            {
+                result.Type = InterventionType.None;
+            }
             return result;
         }
 
@@ -70,13 +83,24 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
         // Let the first few genuine coding submissions establish a pattern without
         // NPC dialogue. GamingTheSystem has already returned above, so paste bypasses
         // are still intercepted immediately.
+        // Level unlocks are still granted during warm-up for the same reason as above.
         if (bktResult.IsWarmUpPhase)
         {
             if (bktResult.IsMastered && diagnosticResult.IsCorrect)
-                result.XpAwarded = XpCorrectAnswer + XpMasteryBonus;
+            {
+                result.Type        = InterventionType.LevelUnlock;
+                result.LevelUnlocked = true;
+                result.XpAwarded   = XpCorrectAnswer + XpMasteryBonus;
+            }
             else if (diagnosticResult.IsCorrect)
+            {
+                result.Type      = InterventionType.None;
                 result.XpAwarded = XpCorrectAnswer;
-            result.Type = InterventionType.None;
+            }
+            else
+            {
+                result.Type = InterventionType.None;
+            }
             return result;
         }
 
