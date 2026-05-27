@@ -17,9 +17,16 @@ public class SessionController : ControllerBase
     {
         var player = await _db.Players.FindAsync(request.UserId);
         if (player == null) return NotFound(new { error = "Player not found" });
-        // Note: no level-gate check here — the game map already controls which
-        // enemies are physically reachable. Enforcing CurrentLevel here would
-        // permanently block players whose DB value lags behind their in-game progress.
+
+        // The Godot game controls which dungeons are physically reachable.
+        // Use the session's dungeon level as the ground truth — update the player's
+        // current level to match the highest dungeon they have entered so the
+        // dashboard and profile always reflect actual in-game progress.
+        if (request.DungeonLevel > player.CurrentLevel)
+        {
+            player.CurrentLevel = request.DungeonLevel;
+            player.UpdatedAt = DateTime.UtcNow;
+        }
 
         var session = new GameSession
         {

@@ -394,13 +394,6 @@ public class SubmissionController : ControllerBase
         bool effectivelyCorrect = diagnosticResult.IsCorrect
             && interventionResult.Type != InterventionType.Rejection;
 
-        if (interventionResult.LevelUnlocked)
-        {
-            int nextLevel = GetDungeonLevelForSkill(skillTypeEnum) + 1;
-            if (nextLevel > player.CurrentLevel && nextLevel <= 3)
-                player.CurrentLevel = nextLevel;
-        }
-
         _db.CodeSubmissions.Add(submission);
         session.SubmissionCount++;
         if (effectivelyCorrect) session.IsCompleted = true;
