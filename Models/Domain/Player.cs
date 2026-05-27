@@ -55,6 +55,7 @@ public class MasteryState
     public double ProbabilityMastery { get; set; } = 0.10;  // BKT P(L)
     public int AttemptCount { get; set; } = 0;
     public int ConsecutiveCorrect { get; set; } = 0;
+    public int ConsecutiveLowProbability { get; set; } = 0;  // Consecutive post-warm-up transitions below UncertaintyThreshold
     public bool IsMastered { get; set; } = false;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

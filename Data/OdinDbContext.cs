@@ -57,6 +57,7 @@ public class OdinDbContext : DbContext
             e.Property(m => m.ProbabilityMastery).HasColumnName("probability_mastery");
             e.Property(m => m.AttemptCount).HasColumnName("attempt_count");
             e.Property(m => m.ConsecutiveCorrect).HasColumnName("consecutive_correct");
+            e.Property(m => m.ConsecutiveLowProbability).HasColumnName("consecutive_low_probability");
             e.Property(m => m.IsMastered).HasColumnName("is_mastered");
             e.Property(m => m.UpdatedAt).HasColumnName("updated_at");
             e.HasOne(m => m.Player).WithMany(p => p.MasteryStates).HasForeignKey(m => m.UserId);

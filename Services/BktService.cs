@@ -16,6 +16,8 @@ public class BktService : IBktService
     private const int    WarmUpAttempts = 3;
     private const double MasteryThreshold = 0.90;
     private const int    ConsecutiveCorrectForMastery = 5;
+    private const double UncertaintyThreshold  = 0.40;  // P(L) below this = uncertain mastery
+    private const int    HelplessTransitions   = 5;     // consecutive uncertain transitions to confirm Helpless
 
     public BktService(OdinDbContext db) { _db = db; }
 
@@ -61,6 +63,13 @@ public class BktService : IBktService
             }
             mastery.ProbabilityMastery = Math.Clamp(mastery.ProbabilityMastery, 0.0, 1.0);
             mastery.MasteryPercentage  = (int)Math.Round(mastery.ProbabilityMastery * 100);
+
+            // Track consecutive transitions that remain below the Uncertainty Threshold.
+            // When this count reaches HelplessTransitions, the BKT engine signals a Helpless state.
+            if (mastery.ProbabilityMastery < UncertaintyThreshold)
+                mastery.ConsecutiveLowProbability++;
+            else
+                mastery.ConsecutiveLowProbability = 0;
         }
 
         mastery.ConsecutiveCorrect = isCorrect ? mastery.ConsecutiveCorrect + 1 : 0;
@@ -69,14 +78,18 @@ public class BktService : IBktService
         mastery.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
+        bool isHelpless = !isWarmUp && mastery.ConsecutiveLowProbability >= HelplessTransitions;
+
         return new BktResult
         {
-            ProbabilityMastery = mastery.ProbabilityMastery,
-            MasteryPercentage  = mastery.MasteryPercentage,
-            IsMastered         = mastery.IsMastered,
-            IsWarmUpPhase      = isWarmUp,
-            AttemptCount       = mastery.AttemptCount,
-            ConsecutiveCorrect = mastery.ConsecutiveCorrect
+            ProbabilityMastery        = mastery.ProbabilityMastery,
+            MasteryPercentage         = mastery.MasteryPercentage,
+            IsMastered                = mastery.IsMastered,
+            IsWarmUpPhase             = isWarmUp,
+            AttemptCount              = mastery.AttemptCount,
+            ConsecutiveCorrect        = mastery.ConsecutiveCorrect,
+            IsHelpless                = isHelpless,
+            ConsecutiveLowProbability = mastery.ConsecutiveLowProbability
         };
     }
 }

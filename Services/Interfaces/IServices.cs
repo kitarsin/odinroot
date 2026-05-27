@@ -59,6 +59,8 @@ public class BktResult
     public bool IsWarmUpPhase { get; set; }
     public int AttemptCount { get; set; }
     public int ConsecutiveCorrect { get; set; }
+    public bool IsHelpless { get; set; }
+    public int ConsecutiveLowProbability { get; set; }
 }
 
 // ── Affective State Evaluation ──
