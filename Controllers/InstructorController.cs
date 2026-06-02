@@ -100,10 +100,10 @@ public class InstructorController : ControllerBase
     public async Task<ActionResult> GetMasteryHeatmap()
     {
         var heatmap = await _db.MasteryStates
-            .GroupBy(m => m.Topic)
+            .GroupBy(m => m.DungeonLevel)
             .Select(g => new
             {
-                Skill = g.Key,
+                DungeonLevel = g.Key,
                 AverageMastery = Math.Round(g.Average(m => m.ProbabilityMastery) * 100, 1),
                 StudentsAttempted = g.Count(m => m.AttemptCount > 0),
                 StudentsMastered = g.Count(m => m.IsMastered),

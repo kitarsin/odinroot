@@ -95,7 +95,9 @@ public class SubmissionController : ControllerBase
                         var player = await _db.Players.FirstOrDefaultAsync(p => p.Id == dbSub.UserId);
                         if (player == null) continue;
 
-                        var bktResult = await _bkt.UpdateMasteryAsync(player.Id, dbSub.SkillType ?? "Unknown", dbSub.IsCorrect);
+                        var subSession = await _db.GameSessions.FindAsync(dbSub.SessionId);
+                        int subDungeonLevel = subSession?.DungeonLevel ?? 0;
+                        var bktResult = await _bkt.UpdateMasteryAsync(player.Id, subDungeonLevel, dbSub.IsCorrect);
 
                         var affectiveResult = _affectiveState.Evaluate(hbdaResult, bktResult, player.HelplessnessScore);
                         player.HelplessnessScore = affectiveResult.UpdatedHelplessnessScore;

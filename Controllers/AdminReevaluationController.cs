@@ -113,7 +113,9 @@ public class AdminReevaluationController : ControllerBase
                         if (player == null) continue;
 
                         // Re-run BKT
-                        var bktResult = await _bktService.UpdateMasteryAsync(player.Id, dbSub.SkillType ?? "Unknown", dbSub.IsCorrect);
+                        var subSession = await _db.GameSessions.FindAsync(dbSub.SessionId);
+                        int subDungeonLevel = subSession?.DungeonLevel ?? 0;
+                        var bktResult = await _bktService.UpdateMasteryAsync(player.Id, subDungeonLevel, dbSub.IsCorrect);
 
                         // Re-run Affective
                         var affectiveResult = _affectiveState.Evaluate(hbdaResult, bktResult, player.HelplessnessScore);
