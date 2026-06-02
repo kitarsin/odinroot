@@ -21,17 +21,17 @@ public class BktService : IBktService
 
     public BktService(OdinDbContext db) { _db = db; }
 
-    public async Task<BktResult> UpdateMasteryAsync(Guid userId, string topic, bool isCorrect)
+    public async Task<BktResult> UpdateMasteryAsync(Guid userId, int dungeonLevel, bool isCorrect)
     {
         var mastery = await _db.MasteryStates
-            .FirstOrDefaultAsync(m => m.UserId == userId && m.Topic == topic);
+            .FirstOrDefaultAsync(m => m.UserId == userId && m.DungeonLevel == dungeonLevel);
 
         if (mastery == null)
         {
             mastery = new MasteryState
             {
                 UserId = userId,
-                Topic = topic,
+                DungeonLevel = dungeonLevel,
                 ProbabilityMastery = P_L0,
                 MasteryPercentage = (int)(P_L0 * 100),
                 IsLocked = false,

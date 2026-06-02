@@ -49,9 +49,9 @@ public class OdinDbContext : DbContext
         modelBuilder.Entity<MasteryState>(e =>
         {
             e.ToTable("progress");
-            e.HasKey(m => new { m.UserId, m.Topic });
+            e.HasKey(m => new { m.UserId, m.DungeonLevel });
             e.Property(m => m.UserId).HasColumnName("user_id");
-            e.Property(m => m.Topic).HasColumnName("topic");
+            e.Property(m => m.DungeonLevel).HasColumnName("dungeon_level");
             e.Property(m => m.MasteryPercentage).HasColumnName("mastery_percentage");
             e.Property(m => m.IsLocked).HasColumnName("is_locked");
             e.Property(m => m.ProbabilityMastery).HasColumnName("probability_mastery");

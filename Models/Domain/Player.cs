@@ -35,20 +35,16 @@ public class Player
 
 /// <summary>
 /// Maps to the existing `progress` table in Supabase.
-/// Composite PK: (user_id, topic).
+/// Composite PK: (user_id, dungeon_level).
 ///
-/// Original: user_id, topic, mastery_percentage, is_locked
-/// Added:    probability_mastery, attempt_count, consecutive_correct, is_mastered, updated_at
-///
-/// The trigger `trg_sync_mastery` auto-updates mastery_percentage
-/// whenever probability_mastery changes, keeping them in sync.
+/// Tracks one BKT mastery state per dungeon level (0-3).
 /// </summary>
 public class MasteryState
 {
     // ── Original `progress` columns ──
     public Guid UserId { get; set; }            // PK part 1
-    public string Topic { get; set; } = "";     // PK part 2 (e.g. "ArrayIteration")
-    public int MasteryPercentage { get; set; } = 0;  // Auto-synced via trigger
+    public int DungeonLevel { get; set; }       // PK part 2 (0 = Tutorial, 1 = Library, etc.)
+    public int MasteryPercentage { get; set; } = 0;
     public bool IsLocked { get; set; } = true;
 
     // ── ODIN-specific columns ──

@@ -315,7 +315,7 @@ public class SubmissionController : ControllerBase
         var bktResult = new BktResult { IsMastered = false, ProbabilityMastery = 0.0 };
         if (!request.IsHintRequest)
         {
-            bktResult = await _bkt.UpdateMasteryAsync(request.PlayerId, request.SkillType, diagnosticResult.IsCorrect);
+            bktResult = await _bkt.UpdateMasteryAsync(request.PlayerId, session.DungeonLevel, diagnosticResult.IsCorrect);
         }
 
         // ── Affective State — logging only (admin/research visibility, never shown to students) ──
@@ -415,28 +415,25 @@ public class SubmissionController : ControllerBase
                     newAchievements.Add("First Victory");
             }
 
-            // Mastery-based — only meaningful when the submitted skill just reached mastery
+            // Mastery-based — fires when the current dungeon level just reached mastery
             if (bktResult.IsMastered)
             {
                 var mastery = await _db.MasteryStates
                     .Where(m => m.UserId == request.PlayerId)
-                    .ToDictionaryAsync(m => m.Topic, m => m.IsMastered);
+                    .ToDictionaryAsync(m => m.DungeonLevel, m => m.IsMastered);
 
-                bool Has(string s) => mastery.TryGetValue(s, out var v) && v;
+                bool Has(int level) => mastery.TryGetValue(level, out var v) && v;
 
-                if (!existingNames.Contains("Array Master") && Has("ArrayInitialization") && Has("ArrayAccess"))
+                if (!existingNames.Contains("Array Master") && Has(1))
                     newAchievements.Add("Array Master");
 
-                if (!existingNames.Contains("Loop Expert") && Has("ArrayIteration") && Has("ArrayOperations"))
+                if (!existingNames.Contains("Loop Expert") && Has(2))
                     newAchievements.Add("Loop Expert");
 
-                if (!existingNames.Contains("2D Grid Expert") && Has("MultidimensionalArrays") && Has("JaggedArrays"))
+                if (!existingNames.Contains("2D Grid Expert") && Has(3))
                     newAchievements.Add("2D Grid Expert");
 
-                if (!existingNames.Contains("Bug Slayer") &&
-                    Has("ArrayInitialization") && Has("ArrayAccess") &&
-                    Has("ArrayIteration") && Has("ArrayOperations") &&
-                    Has("MultidimensionalArrays") && Has("JaggedArrays"))
+                if (!existingNames.Contains("Bug Slayer") && Has(1) && Has(2) && Has(3))
                     newAchievements.Add("Bug Slayer");
             }
         }

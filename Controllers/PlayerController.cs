@@ -28,7 +28,7 @@ public class PlayerController : ControllerBase
             player.TotalSubmissions, player.CreatedAt,
             MasteryStates = player.MasteryStates.Select(m => new
             {
-                m.Topic, m.ProbabilityMastery, m.MasteryPercentage,
+                m.DungeonLevel, m.MasteryPercentage,
                 m.IsMastered, m.AttemptCount, m.ConsecutiveCorrect
             })
         });

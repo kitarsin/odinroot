@@ -48,7 +48,7 @@ public class DiagnosticResult
 // ── Stage 3: BKT Engine ──
 public interface IBktService
 {
-    Task<BktResult> UpdateMasteryAsync(Guid userId, string topic, bool isCorrect);
+    Task<BktResult> UpdateMasteryAsync(Guid userId, int dungeonLevel, bool isCorrect);
 }
 
 public class BktResult
