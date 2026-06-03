@@ -86,10 +86,9 @@ public class HbdaService : IHbdaService
         CodeSubmission? previous,
         List<CodeSubmission> sessionHistory,
         double inactivityDuration,
-        double postErrorInactivitySeconds = -1,
-        bool rapidTaskSurfaceWithoutKeys = false)
+        double postErrorInactivitySeconds = -1)
     {
-        var gamingCheck = IsGamingTheSystem(current, sessionHistory, rapidTaskSurfaceWithoutKeys);
+        var gamingCheck = IsGamingTheSystem(current, sessionHistory);
         if (gamingCheck.IsGaming)
         {
             var confLevel = gamingCheck.Confidence >= 1.0 ? ConfidenceLevel.High :
@@ -135,19 +134,19 @@ public class HbdaService : IHbdaService
     /// Gaming the System detection with confidence scores.
     /// </summary>
     private static (bool IsGaming, double Confidence, string Reason) IsGamingTheSystem(
-        CodeSubmission c, List<CodeSubmission> history, bool rapidTaskSurfaceWithoutKeys)
+        CodeSubmission c, List<CodeSubmission> history)
     {
         if (c.TaskBypassedDuration.HasValue && c.TaskBypassedDuration.Value < 15.0)
         {
             return (true, 1.0, $"High Confidence Gaming: Task bypassed in {c.TaskBypassedDuration.Value:F1}s");
         }
 
-        // Primary and only gaming indicator: rapid repeated hint requests.
-        // Paste is blocked locally in the editor, and rapid compiles are handled
-        // by the normal low-progress/tinkering path instead of GamingTheSystem.
-        if (c.HintUsageCount > GamingHintRequestMin && c.TaskElapsedSeconds <= GamingHintWindowSeconds)
+        // Primary gaming indicator: rapid repeated hint requests on a single problem.
+        // HintUsageCount is tracked per-problem by the client, so the count alone
+        // is sufficient — no session-elapsed time gate needed.
+        if (c.HintUsageCount > GamingHintRequestMin)
         {
-            return (true, 1.0, $"High Confidence Gaming: Excessive hints ({c.HintUsageCount}) in {c.TaskElapsedSeconds:F0}s");
+            return (true, 1.0, $"High Confidence Gaming: Excessive hints ({c.HintUsageCount}) on this problem");
         }
 
         return (false, 0.0, "");

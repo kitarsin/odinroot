@@ -12,8 +12,7 @@ public interface IHbdaService
         CodeSubmission? previousSubmission,
         List<CodeSubmission> sessionHistory,
         double inactivityDuration,
-        double postErrorInactivitySeconds = -1,
-        bool rapidTaskSurfaceWithoutKeys = false);
+        double postErrorInactivitySeconds = -1);
 }
 
 public class HbdaResult

@@ -307,10 +307,7 @@ public class SubmissionController : ControllerBase
             previousSubmission,
             sessionHistory,
             inactivityDuration,
-            request.KeystrokeData.PostErrorInactivitySeconds,
-            rapidTaskSurfaceWithoutKeys: request.KeystrokeData.TotalTimeSeconds <= 5.0
-                && keyDownCount == 0
-                && !request.IsHintRequest);
+            request.KeystrokeData.PostErrorInactivitySeconds);
         submission.BehaviorState = hbdaResult.State.ToString();
 
         // ── BKT Update ──
@@ -327,7 +324,9 @@ public class SubmissionController : ControllerBase
         player.UpdatedAt = DateTime.UtcNow;
 
         // ── Adaptive Intervention ──
-        int currentHintTier = sessionHistory.Count(s => s.InterventionType == "ScaffoldingHint");
+        int currentHintTier = sessionHistory.Count(s =>
+            s.InterventionType == "ScaffoldingHint" &&
+            s.BehaviorState == hbdaResult.State.ToString());
 
         InterventionResult interventionResult;
         

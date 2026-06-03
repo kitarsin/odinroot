@@ -183,7 +183,7 @@ public class InterventionControllerService(OdinDbContext db) : IInterventionCont
     private async Task<NpcDialogueDto?> FetchScaffoldingHintAsync(
         string behaviorState, string diagCategory, string skill, int currentHintTier)
     {
-        int tier = Math.Min(currentHintTier + 1, 3);
+        int tier = Math.Min(currentHintTier, 3);
 
         var hint =
             // 1. Exact: behavior + skill + tier
