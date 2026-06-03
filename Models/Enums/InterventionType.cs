@@ -15,6 +15,9 @@ public enum InterventionType
     /// <summary>Scaffolded hint delivered via NPC dialogue — logic errors found or wheel-spinning detected.</summary>
     ScaffoldingHint,
 
+    /// <summary>Puzzle-specific hint served in response to an explicit player hint request. Not counted toward behavioral tier escalation.</summary>
+    PuzzleHint,
+
     /// <summary>Positive reinforcement — Productive Failure or Active Thinking identified.</summary>
     Reward,
 
