@@ -556,8 +556,7 @@ public class SubmissionController : ControllerBase
             previousSubmission,
             sessionHistory,
             request.KeystrokeData.InactivityDuration,
-            request.KeystrokeData.PostErrorInactivitySeconds,
-            request.KeystrokeData.TotalTimeSeconds <= 5.0 && submission.KeyDownCount == 0);
+            request.KeystrokeData.PostErrorInactivitySeconds);
         submission.BehaviorState = hbdaResult.State.ToString();
 
         var bktResult = new BktResult
