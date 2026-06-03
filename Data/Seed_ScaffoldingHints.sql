@@ -1,5 +1,5 @@
 -- ============================================================
--- ODIN Scaffolding Hints — Behavioral State Seed
+-- ODIN Scaffolding Hints - Behavioral State Seed
 -- ============================================================
 -- Convention (Option A):
 --   diagnostic_category = BehaviorState name (e.g. 'PostFailureDisengagement')
@@ -41,8 +41,8 @@ SELECT
     'All',
     2,
     'Odin',
-    'That error message has a line number in it — go to that exact line and read what the code is doing step by step. Arrays start at index 0, not 1. Could that be the issue?',
-    'Check: is your index within bounds? If your array has 5 elements, valid indices are 0–4.',
+    'That error message has a line number in it - go to that exact line and read what the code is doing step by step. Arrays start at index 0, not 1. Could that be the issue?',
+    'Check: is your index within bounds? If your array has 5 elements, valid indices are 0-4.',
     true
 WHERE NOT EXISTS (
     SELECT 1 FROM scaffolding_hints
@@ -80,7 +80,7 @@ SELECT
     'All',
     2,
     'Odin',
-    'If the same error keeps appearing, the fix probably isn''t a small tweak — you may need to restructure part of your logic. Think about what the loop or array access is supposed to do, then rewrite that section from scratch.',
+    'If the same error keeps appearing, the fix probably isn''t a small tweak - you may need to restructure part of your logic. Think about what the loop or array access is supposed to do, then rewrite that section from scratch.',
     'Tip: delete the broken section and rewrite it from a blank line. Sometimes starting fresh is faster than patching.',
     true
 WHERE NOT EXISTS (
@@ -119,8 +119,8 @@ SELECT
     'All',
     2,
     'Odin',
-    'Switching one number for another rarely fixes a logic error. Try printing out a variable''s value using Console.WriteLine to see what it actually holds — that''s how professional programmers debug.',
-    'Example: Console.WriteLine(myArray[i]); — add this inside your loop to see what each value is.',
+    'Switching one number for another rarely fixes a logic error. Try printing out a variable''s value using Console.WriteLine to see what it actually holds - that''s how professional programmers debug.',
+    'Example: Console.WriteLine(myArray[i]); - add this inside your loop to see what each value is.',
     true
 WHERE NOT EXISTS (
     SELECT 1 FROM scaffolding_hints
@@ -180,7 +180,7 @@ SELECT
     'All',
     1,
     'Odin',
-    'Something isn''t quite right. Try reading the error message carefully — it usually tells you exactly which line to look at and what the problem is.',
+    'Something isn''t quite right. Try reading the error message carefully - it usually tells you exactly which line to look at and what the problem is.',
     NULL,
     true
 WHERE NOT EXISTS (
