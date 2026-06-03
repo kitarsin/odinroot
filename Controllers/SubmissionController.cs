@@ -307,7 +307,8 @@ public class SubmissionController : ControllerBase
             previousSubmission,
             sessionHistory,
             inactivityDuration,
-            request.KeystrokeData.PostErrorInactivitySeconds);
+            request.KeystrokeData.PostErrorInactivitySeconds,
+            request.IsHintRequest);
         submission.BehaviorState = hbdaResult.State.ToString();
 
         // ── BKT Update ──
@@ -556,7 +557,8 @@ public class SubmissionController : ControllerBase
             previousSubmission,
             sessionHistory,
             request.KeystrokeData.InactivityDuration,
-            request.KeystrokeData.PostErrorInactivitySeconds);
+            request.KeystrokeData.PostErrorInactivitySeconds,
+            request.IsHintRequest);
         submission.BehaviorState = hbdaResult.State.ToString();
 
         var bktResult = new BktResult

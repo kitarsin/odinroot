@@ -86,9 +86,10 @@ public class HbdaService : IHbdaService
         CodeSubmission? previous,
         List<CodeSubmission> sessionHistory,
         double inactivityDuration,
-        double postErrorInactivitySeconds = -1)
+        double postErrorInactivitySeconds = -1,
+        bool isHintRequest = false)
     {
-        var gamingCheck = IsGamingTheSystem(current, sessionHistory);
+        var gamingCheck = IsGamingTheSystem(current, sessionHistory, isHintRequest);
         if (gamingCheck.IsGaming)
         {
             var confLevel = gamingCheck.Confidence >= 1.0 ? ConfidenceLevel.High :
@@ -134,17 +135,17 @@ public class HbdaService : IHbdaService
     /// Gaming the System detection with confidence scores.
     /// </summary>
     private static (bool IsGaming, double Confidence, string Reason) IsGamingTheSystem(
-        CodeSubmission c, List<CodeSubmission> history)
+        CodeSubmission c, List<CodeSubmission> history, bool isHintRequest)
     {
         if (c.TaskBypassedDuration.HasValue && c.TaskBypassedDuration.Value < 15.0)
         {
             return (true, 1.0, $"High Confidence Gaming: Task bypassed in {c.TaskBypassedDuration.Value:F1}s");
         }
 
-        // Primary gaming indicator: rapid repeated hint requests on a single problem.
-        // HintUsageCount is tracked per-problem by the client, so the count alone
-        // is sufficient — no session-elapsed time gate needed.
-        if (c.HintUsageCount > GamingHintRequestMin)
+        // Hint-count gaming only applies to actual hint requests.
+        // Regular code submissions retain the count for analytics but must not
+        // be re-flagged — the student may be genuinely attempting to solve the problem.
+        if (isHintRequest && c.HintUsageCount > GamingHintRequestMin)
         {
             return (true, 1.0, $"High Confidence Gaming: Excessive hints ({c.HintUsageCount}) on this problem");
         }

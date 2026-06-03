@@ -12,7 +12,8 @@ public interface IHbdaService
         CodeSubmission? previousSubmission,
         List<CodeSubmission> sessionHistory,
         double inactivityDuration,
-        double postErrorInactivitySeconds = -1);
+        double postErrorInactivitySeconds = -1,
+        bool isHintRequest = false);
 }
 
 public class HbdaResult
