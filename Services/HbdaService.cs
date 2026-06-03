@@ -250,13 +250,10 @@ public class HbdaService : IHbdaService
             ? postErrorInactivitySeconds
             : inactivityDuration;
 
-        // Exclusion #1: Brief pause (< 120s) even if ED is small = reflection, not helplessness
+        // Exclusion #1: Brief pause (< 120s) = student is still actively engaging.
+        // Small edits without prolonged inactivity are WheelSpinning/Tinkering territory, not Disengagement.
         if (reflectiveIdle < DisengagementIntervalMin)
-        {
-            // Allow reflection even with small edits if new error type (exploration)
-            if (previous != null && current.DiagnosticCategory != previous.DiagnosticCategory)
-                return true;
-        }
+            return true;
 
         // Exclusion #2: Even if 120s+ pause, if followed by major structural change = strategy pivot
         if (reflectiveIdle >= DisengagementIntervalMin && current.EditDistance >= 10)
@@ -569,10 +566,7 @@ public class HbdaService : IHbdaService
         List<CodeSubmission> history)
     {
         if (current.IsCorrect || current.DiagnosticCategory == "None") return false;
-        if (previous == null || !previous.Equals(current.DiagnosticCategory)) 
-        {
-            if (previous?.DiagnosticCategory != current.DiagnosticCategory) return false;
-        }
+        if (previous == null || previous.DiagnosticCategory != current.DiagnosticCategory) return false;
 
         // Count consecutive submissions with same error
         int sameErrorCount = 1; // Current submission
