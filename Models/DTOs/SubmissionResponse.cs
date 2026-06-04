@@ -32,6 +32,12 @@ public class SubmissionResponse
     /// <summary>The behavioral state classified by HBDA.</summary>
     public string BehaviorState { get; set; } = string.Empty;
 
+    /// <summary>Human-readable explanation of why HBDA chose this state.</summary>
+    public string HbdaReasoning { get; set; } = string.Empty;
+
+    /// <summary>Confidence level of the HBDA classification: Low, Moderate, or High.</summary>
+    public string BehaviorConfidence { get; set; } = string.Empty;
+
     /// <summary>Current cumulative helplessness score.</summary>
     public double HelplessnessScore { get; set; }
 
