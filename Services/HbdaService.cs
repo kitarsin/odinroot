@@ -328,9 +328,11 @@ public class HbdaService : IHbdaService
 
         string currentNorm = NormalizeStructure(current.SourceCode);
 
-        // Indicator 1: 3 or more consecutive identical errors AND no structural change
+        // Indicator 1: 3 or more consecutive same-category submissions AND no structural change.
+        // Intentionally allows DiagnosticCategory == "None": identical wrong answers with no error
+        // category are still structural stasis and belong to WheelSpinning, not Tinkering.
         bool ind1_3ErrorsNoStructChange = false;
-        if (sessionHistory.Count >= 2 && current.DiagnosticCategory != "None")
+        if (sessionHistory.Count >= 2)
         {
             var last2 = sessionHistory.OrderByDescending(h => h.SubmittedAt).Take(2).ToList();
             bool sameError = last2.All(h => h.DiagnosticCategory == current.DiagnosticCategory);
