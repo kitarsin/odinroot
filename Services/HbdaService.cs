@@ -762,7 +762,9 @@ public class HbdaService : IHbdaService
         if (!isCurrentProgressive) return null;
         if (!hasHighCoverage) return null;
         if (!hasMinimalSystemChecks) return null;
-        if (!hasSelfCorrections) return null;
+        // hasSelfCorrections is corroborating evidence, not a hard gate.
+        // A student who plans carefully and types cleanly (no self-corrections) still qualifies;
+        // self-corrections present → higher confidence.
 
         // Evaluate Confidence
         var (confidenceLevel, delta) = EvaluateActiveThinkingConfidence(
@@ -778,20 +780,25 @@ public class HbdaService : IHbdaService
     }
 
     private static (ConfidenceLevel, double) EvaluateActiveThinkingConfidence(
-        bool isExtendedPause, bool hasHighCoverage, bool hasTwoProgressive, 
+        bool isExtendedPause, bool hasHighCoverage, bool hasTwoProgressive,
         bool hasMinimalSystemChecks, bool hasSelfCorrections, bool isCorrect)
     {
-        // HIGH if Extended pause, at least 2 progressive submits, single typing burst, and correct or near-correct outcome.
-        if (isExtendedPause && hasTwoProgressive && hasHighCoverage)
+        // HIGH: extended pause + two progressive submissions + high coverage + self-corrections
+        // (self-corrections confirm active rethinking while typing, not just lucky guess)
+        if (isExtendedPause && hasTwoProgressive && hasHighCoverage && hasSelfCorrections)
             return (ConfidenceLevel.High, WeightActiveThinkingHigh);
 
-        // MODERATE if Pauses present but session is fragmented or outcome is incorrect.
-        if (isExtendedPause && (!hasHighCoverage || !isCorrect))
+        // MODERATE: strong structural signals without self-corrections — student planned well
+        // and typed cleanly, or single progressive attempt with high coverage
+        if (isExtendedPause && hasHighCoverage && isCurrentProgressive(isCorrect, hasTwoProgressive))
             return (ConfidenceLevel.Moderate, WeightActiveThinkingModerate);
 
-        // LOW if Indicators partially present with ambiguous outcome.
+        // LOW: minimum conditions met but evidence is incomplete
         return (ConfidenceLevel.Low, WeightActiveThinkingLow);
     }
+
+    private static bool isCurrentProgressive(bool isCorrect, bool hasTwoProgressive) =>
+        isCorrect || hasTwoProgressive;
 
     private static string GetActiveThinkingIndicatorSummary(
         bool pause, bool coverage, bool prog, bool sysChecks, bool selfCorr)
