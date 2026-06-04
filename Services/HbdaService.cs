@@ -730,8 +730,11 @@ public class HbdaService : IHbdaService
         if (HasThreePlusConsecutiveSameRuntimeErrors(current, sessionHistory))
             return null;
 
-        // Post-error long pause on the same error is not "planning" / ActiveThinking
-        if (previous != null && !previous.IsCorrect
+        // Post-error long pause on the SAME error (and still wrong) is not "planning" / ActiveThinking.
+        // Correct answers are never excluded here — a student who finally solves it after a long
+        // pause earns ActiveThinking regardless of what their DiagnosticCategory says.
+        if (!current.IsCorrect
+            && previous != null && !previous.IsCorrect
             && current.DiagnosticCategory == previous.DiagnosticCategory
             && (current.SubmissionIntervalSeconds > ThinkingIntervalMin
                 || current.InitialLatencyMs / 1000.0 >= PreTaskPauseMin))
@@ -760,11 +763,10 @@ public class HbdaService : IHbdaService
 
         if (!isExtendedPause) return null;
         if (!isCurrentProgressive) return null;
-        if (!hasHighCoverage) return null;
         if (!hasMinimalSystemChecks) return null;
-        // hasSelfCorrections is corroborating evidence, not a hard gate.
-        // A student who plans carefully and types cleanly (no self-corrections) still qualifies;
-        // self-corrections present → higher confidence.
+        // hasHighCoverage and hasSelfCorrections are corroborating evidence, not hard gates.
+        // Coverage may be 0 when raw keystroke events aren't sent; self-corrections may be 0
+        // for a student who plans well and types cleanly. Both boost confidence when present.
 
         // Evaluate Confidence
         var (confidenceLevel, delta) = EvaluateActiveThinkingConfidence(
@@ -783,22 +785,17 @@ public class HbdaService : IHbdaService
         bool isExtendedPause, bool hasHighCoverage, bool hasTwoProgressive,
         bool hasMinimalSystemChecks, bool hasSelfCorrections, bool isCorrect)
     {
-        // HIGH: extended pause + two progressive submissions + high coverage + self-corrections
-        // (self-corrections confirm active rethinking while typing, not just lucky guess)
+        // HIGH: extended pause + two progressive submissions + both corroborating signals
         if (isExtendedPause && hasTwoProgressive && hasHighCoverage && hasSelfCorrections)
             return (ConfidenceLevel.High, WeightActiveThinkingHigh);
 
-        // MODERATE: strong structural signals without self-corrections — student planned well
-        // and typed cleanly, or single progressive attempt with high coverage
-        if (isExtendedPause && hasHighCoverage && isCurrentProgressive(isCorrect, hasTwoProgressive))
+        // MODERATE: extended pause + progressive + at least one corroborating signal
+        if (isExtendedPause && (isCorrect || hasTwoProgressive) && (hasHighCoverage || hasSelfCorrections))
             return (ConfidenceLevel.Moderate, WeightActiveThinkingModerate);
 
-        // LOW: minimum conditions met but evidence is incomplete
+        // LOW: minimum conditions met (extended pause + progressive), no corroborating signals
         return (ConfidenceLevel.Low, WeightActiveThinkingLow);
     }
-
-    private static bool isCurrentProgressive(bool isCorrect, bool hasTwoProgressive) =>
-        isCorrect || hasTwoProgressive;
 
     private static string GetActiveThinkingIndicatorSummary(
         bool pause, bool coverage, bool prog, bool sysChecks, bool selfCorr)
