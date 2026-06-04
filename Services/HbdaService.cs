@@ -14,7 +14,7 @@ namespace ODIN.Api.Services;
 ///   1. GamingTheSystem              — more than 3 hint requests within 60 seconds
 ///   2. PostFailureDisengagement     — Multiple indicators of learned helplessness
 ///   3. WheelSpinning                — &gt;= 3 consecutive same errors, no structural change
-///   4. LowProgressTrialAndError     — SI &lt; 6s with character/value cycling or persistent error
+///   4. LowProgressTrialAndError     — SI &lt; 6s with character/value cycling or persistent error (structure varies)
 ///   5. HintWithheld                 — SI &gt; 15s AND new/different error
 ///   6. ActiveThinking               — extended pause + productive attempt + high typing coverage + minimal checks + self-corrections
 ///
@@ -321,9 +321,6 @@ public class HbdaService : IHbdaService
     {
         if (current.IsCorrect) return null;
 
-        // Exclusion: Rapid character changes (SI < 6s) -> handled by Tinkering
-        if (current.SubmissionIntervalSeconds < TinkeringIntervalMax) return null;
-
         // "Session ends" -> empty / sentinel abandon marker (client session-end telemetry).
         bool isSessionEnds = string.IsNullOrWhiteSpace(current.SourceCode)
             || current.SourceCode == "SKIP"
@@ -448,15 +445,19 @@ public class HbdaService : IHbdaService
                                               NormalizeStructure(current.SourceCode) == NormalizeStructure(previous.SourceCode);
 
         // If no indicators present, not tinkering
-        if (!indicator1_RapidSI && !indicator2_CharacterCycling && !indicator3_NumericCycling 
+        if (!indicator1_RapidSI && !indicator2_CharacterCycling && !indicator3_NumericCycling
             && !indicator4_PersistentError)
             return null;
 
-        // Exclusion #2: Strategic element progression (different error types = exploring)
+        // Exclusion #2: Structural stasis across 3+ submissions → WheelSpinning territory, not Tinkering.
+        if (IsStructurallyStagnant(current, sessionHistory, minConsecutive: 2))
+            return null;
+
+        // Exclusion #3: Strategic element progression (different error types = exploring)
         if (ShouldExcludeAsStrategicProgression(current, previous, sessionHistory))
             return null;
 
-        // Exclusion #3: Reflection pause + recovery (pause > 15s then major change)
+        // Exclusion #4: Reflection pause + recovery (pause > 15s then major change)
         if (ShouldExcludeAsReflectionRecovery(current, previous, sessionHistory))
             return null;
 
@@ -682,6 +683,23 @@ public class HbdaService : IHbdaService
         if (string.IsNullOrEmpty(code)) return new List<int>();
         var matches = Regex.Matches(code, @"\b(\d+)\b");
         return matches.Cast<Match>().Select(m => int.Parse(m.Groups[1].Value)).ToList();
+    }
+
+    /// Returns true when the current submission and the last <paramref name="minConsecutive"/>
+    /// history entries all share the same normalized structure AND the same DiagnosticCategory
+    /// and are all incorrect — structural-stasis signal that belongs to WheelSpinning, not Tinkering.
+    private static bool IsStructurallyStagnant(
+        CodeSubmission current,
+        List<CodeSubmission> history,
+        int minConsecutive)
+    {
+        if (history.Count < minConsecutive) return false;
+        string currentNorm = NormalizeStructure(current.SourceCode);
+        var recent = history.OrderByDescending(h => h.SubmittedAt).Take(minConsecutive).ToList();
+        return recent.All(h =>
+            NormalizeStructure(h.SourceCode) == currentNorm &&
+            h.DiagnosticCategory == current.DiagnosticCategory &&
+            !h.IsCorrect);
     }
 
     /// HintWithheld: SI > 15s AND a new/different error (student is actively exploring)
