@@ -49,7 +49,7 @@ public class DiagnosticResult
 public interface IBktService
 {
     Task<BktResult> UpdateMasteryAsync(Guid userId, int dungeonLevel, bool isCorrect);
-    Task<BktResult> PreviewArenaMasteryAsync(Guid userId, int dungeonLevel, string arenaRunId, bool isCorrect, bool forceWarmUpComplete);
+    Task<BktResult> PreviewArenaMasteryAsync(Guid userId, int dungeonLevel, string arenaRunId, bool isCorrect);
     Task<BktResult> CommitArenaMasteryAsync(Guid userId, int dungeonLevel, string arenaRunId);
 }
 
@@ -63,6 +63,7 @@ public class BktResult
     public int ConsecutiveCorrect { get; set; }
     public bool IsHelpless { get; set; }
     public int ConsecutiveLowProbability { get; set; }
+    public int WarmUpAttempts { get; set; } = 3;
 }
 
 // ── Affective State Evaluation ──

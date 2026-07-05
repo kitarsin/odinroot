@@ -92,16 +92,16 @@ public class BktService : IBktService
             AttemptCount              = mastery.AttemptCount,
             ConsecutiveCorrect        = mastery.ConsecutiveCorrect,
             IsHelpless                = isHelpless,
-            ConsecutiveLowProbability = mastery.ConsecutiveLowProbability
+            ConsecutiveLowProbability = mastery.ConsecutiveLowProbability,
+            WarmUpAttempts            = WarmUpAttempts
         };
     }
 
-    public async Task<BktResult> PreviewArenaMasteryAsync(Guid userId, int dungeonLevel, string arenaRunId, bool isCorrect, bool forceWarmUpComplete)
+    public async Task<BktResult> PreviewArenaMasteryAsync(Guid userId, int dungeonLevel, string arenaRunId, bool isCorrect)
     {
         if (string.IsNullOrWhiteSpace(arenaRunId))
             return await GetCurrentResultAsync(userId, dungeonLevel);
 
-        var warmUpAttempts = forceWarmUpComplete ? 0 : WarmUpAttempts;
         PurgeExpiredArenaStates();
         var key = ArenaKey(userId, dungeonLevel, arenaRunId);
         if (!ArenaStates.TryGetValue(key, out var state))
@@ -109,9 +109,9 @@ public class BktService : IBktService
             state = CreateFreshArenaState();
             state = ArenaStates.GetOrAdd(key, state);
         }
-        ApplyTransition(state, isCorrect, warmUpAttempts);
+        ApplyTransition(state, isCorrect);
         state.LastTouchedAt = DateTime.UtcNow;
-        return ToResult(state, warmUpAttempts);
+        return ToResult(state);
     }
 
     public async Task<BktResult> CommitArenaMasteryAsync(Guid userId, int dungeonLevel, string arenaRunId)
@@ -146,7 +146,7 @@ public class BktService : IBktService
         mastery.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
-        return ToResult(state, warmUpAttempts: 0);
+        return ToResult(state);
     }
 
     private async Task<BktResult> GetCurrentResultAsync(Guid userId, int dungeonLevel)
@@ -186,10 +186,10 @@ public class BktService : IBktService
         LastTouchedAt = DateTime.UtcNow
     };
 
-    private static void ApplyTransition(ArenaBktState state, bool isCorrect, int warmUpAttempts = WarmUpAttempts)
+    private static void ApplyTransition(ArenaBktState state, bool isCorrect)
     {
         state.AttemptCount++;
-        var isWarmUp = state.AttemptCount <= warmUpAttempts;
+        var isWarmUp = state.AttemptCount <= WarmUpAttempts;
 
         if (!isWarmUp)
         {
@@ -222,9 +222,9 @@ public class BktService : IBktService
                          && state.ConsecutiveCorrect >= ConsecutiveCorrectForMastery;
     }
 
-    private static BktResult ToResult(ArenaBktState state, int warmUpAttempts = WarmUpAttempts)
+    private static BktResult ToResult(ArenaBktState state)
     {
-        var isWarmUp = state.AttemptCount <= warmUpAttempts;
+        var isWarmUp = state.AttemptCount <= WarmUpAttempts;
         return new BktResult
         {
             ProbabilityMastery = state.ProbabilityMastery,
@@ -234,7 +234,8 @@ public class BktService : IBktService
             AttemptCount = state.AttemptCount,
             ConsecutiveCorrect = state.ConsecutiveCorrect,
             IsHelpless = !isWarmUp && state.ConsecutiveLowProbability >= HelplessTransitions,
-            ConsecutiveLowProbability = state.ConsecutiveLowProbability
+            ConsecutiveLowProbability = state.ConsecutiveLowProbability,
+            WarmUpAttempts = WarmUpAttempts
         };
     }
 

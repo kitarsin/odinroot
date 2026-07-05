@@ -322,8 +322,7 @@ public class SubmissionController : ControllerBase
                     request.PlayerId,
                     session.DungeonLevel,
                     request.ArenaRunId,
-                    diagnosticResult.IsCorrect,
-                    request.ArenaCommit)
+                    diagnosticResult.IsCorrect)
                 : await _bkt.UpdateMasteryAsync(request.PlayerId, session.DungeonLevel, diagnosticResult.IsCorrect);
         }
 
@@ -503,6 +502,8 @@ public class SubmissionController : ControllerBase
             MasteryPercentage  = bktResult.MasteryPercentage,
             IsMastered = bktResult.IsMastered,
             IsWarmUpPhase = bktResult.IsWarmUpPhase,
+            AttemptCount = bktResult.AttemptCount,
+            WarmUpAttempts = bktResult.WarmUpAttempts,
             InterventionType = interventionResult.Type.ToString(),
             NpcDialogue = interventionResult.NpcDialogue,
             LevelUnlocked = interventionResult.LevelUnlocked,
@@ -631,6 +632,8 @@ public class SubmissionController : ControllerBase
             MasteryPercentage  = bktResult.MasteryPercentage,
             IsMastered = bktResult.IsMastered,
             IsWarmUpPhase = bktResult.IsWarmUpPhase,
+            AttemptCount = bktResult.AttemptCount,
+            WarmUpAttempts = bktResult.WarmUpAttempts,
             InterventionType = interventionResult.Type.ToString(),
             NpcDialogue = null,
             LevelUnlocked = false,

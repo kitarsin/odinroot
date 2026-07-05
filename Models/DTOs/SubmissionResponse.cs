@@ -58,6 +58,12 @@ public class SubmissionResponse
     /// <summary>Whether BKT is still in warm-up phase (first 3 attempts).</summary>
     public bool IsWarmUpPhase { get; set; }
 
+    /// <summary>Current BKT attempt count for this level/mastery state.</summary>
+    public int AttemptCount { get; set; }
+
+    /// <summary>Number of attempts used for BKT warm-up.</summary>
+    public int WarmUpAttempts { get; set; }
+
     // ── Intervention Output ──
 
     /// <summary>The pedagogical action triggered: None, Rejection, ScaffoldingHint, Reward, LevelUnlock.</summary>
