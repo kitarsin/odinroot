@@ -656,14 +656,6 @@ public class SubmissionController : ControllerBase
         return Ok(submissions);
     }
 
-    private static int GetDungeonLevelForSkill(SkillType skill) => skill switch
-    {
-        SkillType.ArrayInitialization => 1, SkillType.ArrayAccess => 1,
-        SkillType.ArrayIteration => 2,      SkillType.ArrayOperations => 2,
-        SkillType.MultidimensionalArrays => 3, SkillType.JaggedArrays => 3,
-        _ => 1
-    };
-
     private static HashSet<string> ParseAchievementNames(string json)
     {
         try
