@@ -106,7 +106,9 @@ public class BktService : IBktService
         var key = ArenaKey(userId, dungeonLevel, arenaRunId);
         if (!ArenaStates.TryGetValue(key, out var state))
         {
-            state = CreateFreshArenaState();
+            // Arena mirrors story-mode BKT by starting from the persisted level mastery,
+            // then stages transitions in memory until the run is completed.
+            state = await LoadArenaState(userId, dungeonLevel);
             state = ArenaStates.GetOrAdd(key, state);
         }
         ApplyTransition(state, isCorrect);
