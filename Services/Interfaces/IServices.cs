@@ -49,7 +49,7 @@ public class DiagnosticResult
 public interface IBktService
 {
     Task<BktResult> UpdateMasteryAsync(Guid userId, int dungeonLevel, bool isCorrect);
-    Task<BktResult> PreviewArenaMasteryAsync(Guid userId, int dungeonLevel, string arenaRunId, bool isCorrect);
+    Task<BktResult> PreviewArenaMasteryAsync(Guid userId, int dungeonLevel, string arenaRunId, bool isCorrect, bool forceWarmUpComplete);
     Task<BktResult> CommitArenaMasteryAsync(Guid userId, int dungeonLevel, string arenaRunId);
 }
 

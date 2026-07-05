@@ -322,7 +322,8 @@ public class SubmissionController : ControllerBase
                     request.PlayerId,
                     session.DungeonLevel,
                     request.ArenaRunId,
-                    diagnosticResult.IsCorrect)
+                    diagnosticResult.IsCorrect,
+                    request.ArenaCommit)
                 : await _bkt.UpdateMasteryAsync(request.PlayerId, session.DungeonLevel, diagnosticResult.IsCorrect);
         }
 
