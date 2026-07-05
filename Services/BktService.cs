@@ -105,7 +105,7 @@ public class BktService : IBktService
         var key = ArenaKey(userId, dungeonLevel, arenaRunId);
         if (!ArenaStates.TryGetValue(key, out var state))
         {
-            state = await LoadArenaState(userId, dungeonLevel);
+            state = CreateFreshArenaState();
             state = ArenaStates.GetOrAdd(key, state);
         }
         ApplyTransition(state, isCorrect);
@@ -161,16 +161,7 @@ public class BktService : IBktService
             .FirstOrDefaultAsync(m => m.UserId == userId && m.DungeonLevel == dungeonLevel);
 
         return mastery == null
-            ? new ArenaBktState
-            {
-                ProbabilityMastery = P_L0,
-                MasteryPercentage = (int)(P_L0 * 100),
-                AttemptCount = 0,
-                ConsecutiveCorrect = 0,
-                ConsecutiveLowProbability = 0,
-                IsMastered = false,
-                LastTouchedAt = DateTime.UtcNow
-            }
+            ? CreateFreshArenaState()
             : new ArenaBktState
             {
                 ProbabilityMastery = mastery.ProbabilityMastery,
@@ -182,6 +173,17 @@ public class BktService : IBktService
                 LastTouchedAt = DateTime.UtcNow
             };
     }
+
+    private static ArenaBktState CreateFreshArenaState() => new()
+    {
+        ProbabilityMastery = P_L0,
+        MasteryPercentage = (int)(P_L0 * 100),
+        AttemptCount = 0,
+        ConsecutiveCorrect = 0,
+        ConsecutiveLowProbability = 0,
+        IsMastered = false,
+        LastTouchedAt = DateTime.UtcNow
+    };
 
     private static void ApplyTransition(ArenaBktState state, bool isCorrect)
     {
