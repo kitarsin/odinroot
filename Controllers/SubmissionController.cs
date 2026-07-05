@@ -144,6 +144,8 @@ public class SubmissionController : ControllerBase
         if (request.IsSessionEndTelemetry)
             return await HandleSessionEndTelemetryAsync(request, player, session);
 
+        bool isArenaMode = IsArenaRequest(request);
+
         if (!Enum.TryParse<SkillType>(request.SkillType, true, out var skillTypeEnum))
             return BadRequest(new { error = "Invalid SkillType", value = request.SkillType });
 
@@ -315,7 +317,13 @@ public class SubmissionController : ControllerBase
         var bktResult = new BktResult { IsMastered = false, ProbabilityMastery = 0.0 };
         if (!request.IsHintRequest)
         {
-            bktResult = await _bkt.UpdateMasteryAsync(request.PlayerId, session.DungeonLevel, diagnosticResult.IsCorrect);
+            bktResult = isArenaMode
+                ? await _bkt.PreviewArenaMasteryAsync(
+                    request.PlayerId,
+                    session.DungeonLevel,
+                    request.ArenaRunId,
+                    diagnosticResult.IsCorrect)
+                : await _bkt.UpdateMasteryAsync(request.PlayerId, session.DungeonLevel, diagnosticResult.IsCorrect);
         }
 
         // ── Affective State — logging only (admin/research visibility, never shown to students) ──
@@ -395,6 +403,14 @@ public class SubmissionController : ControllerBase
         // the student must engage genuinely with the problem to earn completion.
         bool effectivelyCorrect = diagnosticResult.IsCorrect
             && interventionResult.Type != InterventionType.Rejection;
+
+        if (isArenaMode && request.ArenaCommit && effectivelyCorrect)
+        {
+            bktResult = await _bkt.CommitArenaMasteryAsync(
+                request.PlayerId,
+                session.DungeonLevel,
+                request.ArenaRunId);
+        }
 
         _db.CodeSubmissions.Add(submission);
         session.SubmissionCount++;
@@ -661,6 +677,10 @@ public class SubmissionController : ControllerBase
         }
         catch { return []; }
     }
+
+    private static bool IsArenaRequest(SubmissionRequest request) =>
+        string.Equals(request.GameMode, "arena", StringComparison.OrdinalIgnoreCase)
+        || !string.IsNullOrWhiteSpace(request.ArenaRunId);
 
     // Strip comments and collapse whitespace so trivial edits don't bypass the starter code guard.
     private static string NormalizeCode(string code)

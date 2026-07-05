@@ -34,6 +34,21 @@ public class SubmissionRequest
     /// When true, server records minimal telemetry for HBDA (e.g. session abandoned) without running AST/BKT on code.
     /// </summary>
     public bool IsSessionEndTelemetry { get; set; }
+
+    /// <summary>
+    /// "story" for normal progression, "arena" for replayable level runs.
+    /// Arena submissions stage mastery until ArenaCommit is true.
+    /// </summary>
+    public string GameMode { get; set; } = "story";
+
+    /// <summary>Client-generated identifier shared by every battle in one arena run.</summary>
+    public string ArenaRunId { get; set; } = string.Empty;
+
+    /// <summary>Godot arena level enum value, used only for diagnostics/telemetry.</summary>
+    public int ArenaLevel { get; set; } = -1;
+
+    /// <summary>True on the final boss/level boss submission that should commit staged arena mastery.</summary>
+    public bool ArenaCommit { get; set; }
 }
 
 /// <summary>
