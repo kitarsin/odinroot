@@ -1,247 +1,127 @@
-# ODIN API — Observational Debugging & Intervention Node
+# ODIN Core API
 
-**ASP.NET Core 8.0 Backend for the ODIN Intelligent Tutoring System**
+The ODIN Core API is the ASP.NET Core backend for the ODIN intelligent tutoring system. It authenticates requests with Supabase JWTs, evaluates student code, records session and interaction data, tracks mastery, and returns feedback for the web and Godot clients.
 
-The Pedagogical Kernel that powers ODIN's "Stealth Assessment" — a Sequential Processing Pipeline that analyzes every student code submission through Behavioral Filtering, Structural Diagnosis, and Probabilistic Scoring before generating adaptive pedagogical interventions.
+## C# learning focus
 
----
+ODIN's current learning domain is college-level C# arrays. The tasks focus on array problem-solving and common logic misconceptions, especially off-by-one indexing and out-of-bounds access. Collections and object-oriented constructs are possible future expansions, not current supported learning domains.
 
-## Architecture Overview
+The API uses rule-based code diagnostics and observable behavior signals to guide support. It does not diagnose learned helplessness or any other clinical condition.
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    GAME CLIENT (React/Godot)                  │
-│         Keystroke Dynamics Monitor + Code Editor              │
-└─────────────────────────┬────────────────────────────────────┘
-                          │ HTTPS POST /api/submission
-                          │ JSON: { sourceCode, keystrokeData }
-                          ▼
-┌──────────────────────────────────────────────────────────────┐
-│              SUBMISSION ORCHESTRATOR (API Gateway)            │
-│                   SubmissionController.cs                     │
-└──┬──────────┬──────────┬──────────┬──────────┬───────────────┘
-   │          │          │          │          │
-   ▼          ▼          ▼          ▼          ▼
-┌──────┐ ┌────────┐ ┌────────┐ ┌─────────┐ ┌────────────┐
-│ HBDA │ │  AST   │ │  BKT   │ │Affective│ │Intervention│
-│      │ │Roslyn  │ │Engine  │ │  State  │ │ Controller │
-│5-state│ │Parser  │ │4-param │ │  Gate   │ │  + Hints   │
-│filter│ │Off-by-1│ │P(L₀)   │ │Helpless │ │  Library   │
-│      │ │OOB,etc │ │P(T,G,S)│ │Threshold│ │  NPC       │
-└──────┘ └────────┘ └────────┘ └─────────┘ └────────────┘
-                          │
-                          ▼
-             ┌──────────────────────┐
-             │   PostgreSQL (Data)  │
-             │ D1: Student Profiles │
-             │ D2: Interaction Logs │
-             │ Scaffolding Library  │
-             └──────────────────────┘
-```
+## Request pipeline
 
-## Sequential Processing Pipeline
+A code submission is processed by the backend services:
 
-Every submission flows through five stages in order:
+1. **Behavior classification** evaluates interaction and submission telemetry.
+2. **Code diagnosis** parses and checks submitted C# array solutions.
+3. **Mastery tracking** updates the student's skill estimate.
+4. **Affective score tracking** records a research/admin signal.
+5. **Intervention selection** returns puzzle hints, NPC dialogue, rewards, or progression updates.
 
-| Stage | Module | File | Purpose |
-|-------|--------|------|---------|
-| 1 | **HBDA** | `Services/HbdaService.cs` | Classifies behavior into 5 states (Table 8 thresholds) |
-| 2 | **AST Diagnosis** | `Services/DiagnosticEngine.cs` | Roslyn AST parsing for C# array misconceptions |
-| 3 | **BKT Engine** | `Services/BktService.cs` | Four-parameter Bayesian Knowledge Tracing |
-| 4 | **Affective State** | `Services/AffectiveStateService.cs` | Helplessness Decision Gate (HBDA + BKT) |
-| 5 | **Intervention** | `Services/InterventionController.cs` | Fetches NPC hints from Scaffolding Library |
+The main submission endpoint is `POST /api/submission`. Its request and response contracts are defined in `Models/DTOs/SubmissionRequest.cs` and `Models/DTOs/SubmissionResponse.cs`.
 
-## HBDA Behavioral States (Table 8)
+## Stack
 
-| State | Thresholds | Score Delta |
-|-------|-----------|-------------|
-| **Tinkering** | SI ≤ 10s, ED ≤ 2, Error | +10 |
-| **Gaming the System** | SI ≤ 5s, HU ≥ 3, ED ≈ 0 | +20 |
-| **Wheel-Spinning** | TT ≥ 120s, Attempts ≥ 10, Same Error | +15 |
-| **Productive Failure** | Attempts ≥ 3, Error changes, ED ≥ 10 | -15 |
-| **Active Thinking** | IL ≥ 30s, KF ≤ 200ms, Near-success | -10 |
+- ASP.NET Core 8
+- Entity Framework Core with Npgsql
+- PostgreSQL through the existing ODIN Supabase database
+- Supabase JWT bearer authentication
+- Roslyn C# parsing and diagnostics
+- Swagger / OpenAPI in Development
 
-## BKT Parameters
-
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| P(L₀) | 0.10 | Initial prior probability of mastery |
-| P(T) | 0.10 | Learning/transition rate per attempt |
-| P(G) | 0.20 | Probability of guessing correctly |
-| P(S) | 0.10 | Probability of slipping despite mastery |
-| Warm-Up | 3 attempts | Suppress updates during cold start (W-11) |
-| Mastery | P(L) ≥ 0.90 + 5 consecutive correct | Level unlock trigger (W-12) |
-
-## AST Diagnostic Rules
-
-The Roslyn-based engine detects these C# array misconceptions:
-
-- **OffByOneError** — `i <= arr.Length` instead of `i < arr.Length`
-- **IndexOutOfRange** — Hardcoded index exceeding declared array size
-- **UninitializedArray** — Array declared but never `new`-initialized
-- **InvalidArraySize** — Array created with zero or negative size
-- **DimensionMismatch** — Wrong number of indices for multidimensional arrays
-- **InfiniteLoop** — `while(true)` without break, or for-loops with no increment
-- **SyntaxError** — Standard Roslyn compiler syntax errors
-
----
-
-## Quick Start
+## Run locally
 
 ### Prerequisites
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- [PostgreSQL 15+](https://www.postgresql.org/download/)
 
-### 1. Set up the database
+- .NET 8 SDK
+- Access to an ODIN Supabase PostgreSQL database and its existing schema
+- Supabase project URL and JWT signing secret
 
-```bash
-# Create the PostgreSQL database and user
-psql -U postgres -c "CREATE USER odin_user WITH PASSWORD 'your_password';"
-psql -U postgres -c "CREATE DATABASE odin_db OWNER odin_user;"
-```
+### Configure secrets
 
-### 2. Configure connection string
-
-Edit `appsettings.json` if your PostgreSQL settings differ:
-```json
-{
-  "ConnectionStrings": {
-    "OdinDb": "Host=localhost;Port=5432;Database=odin_db;Username=odin_user;Password=your_password"
-  }
-}
-```
-
-### 3. Restore and run
+The API reads the PostgreSQL connection string from `ConnectionStrings:SupabaseDb`, and Supabase authentication settings from `Supabase:Url` and `Supabase:JwtSecret`. For local development, store them with .NET user secrets:
 
 ```bash
-cd ODIN.Api
+dotnet user-secrets init
+dotnet user-secrets set "ConnectionStrings:SupabaseDb" "Host=your-db-host;Port=5432;Database=postgres;Username=your-user;Password=your-password;SSL Mode=Require"
+dotnet user-secrets set "Supabase:Url" "https://your-project.supabase.co"
+dotnet user-secrets set "Supabase:JwtSecret" "your-supabase-jwt-secret"
+dotnet user-secrets set "CORS_ALLOWED_ORIGINS" "http://localhost:5173"
+```
+
+Keep database credentials and JWT secrets out of source control. The frontend uses `VITE_ODIN_API_URL` to choose this API's base URL.
+
+### Restore and start
+
+From the repository root:
+
+```bash
 dotnet restore
-dotnet ef migrations add InitialCreate
-dotnet ef database update
-dotnet run
+dotnet run --environment Development --urls http://localhost:5000
 ```
 
-The API starts at `http://localhost:5000` with Swagger UI at the root.
+Swagger UI is available at [http://localhost:5000/swagger](http://localhost:5000/swagger) in Development. The web client defaults to this API URL.
 
-### 4. Test the pipeline
+The API connects to the existing Supabase schema; it does not create or migrate the database schema at startup. Ensure the database is provisioned before running the service.
 
-Use `ODIN.Api.http` with VS Code's REST Client extension, or use Swagger UI to:
+## API routes
 
-1. **Register** a player → `POST /api/player/register`
-2. **Create a session** → `POST /api/session`
-3. **Submit code** → `POST /api/submission` (triggers the full pipeline)
-4. **Check results** — the response contains diagnostics, behavioral state, BKT mastery, and any NPC intervention
+All routes use the `/api` prefix. Authenticated requests should include the Supabase access token as a bearer token.
 
----
+### Submissions
 
-## API Endpoints
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/submission` | Evaluate a code submission or record supported session-end telemetry |
+| `GET` | `/api/submission/session/{sessionId}` | List submissions for a session |
+| `POST` | `/api/submission/reevaluate` | Re-evaluate submissions using the controller's supported request |
 
-### Core Pipeline
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/submission` | **Main endpoint** — runs full pipeline |
+### Sessions
 
-### Player Management
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/player/register` | Register new student |
-| `POST` | `/api/player/login` | Authenticate + retrieve save data |
-| `GET` | `/api/player/{id}` | Get player profile + mastery states |
-| `GET` | `/api/player/{id}/history` | Get interaction history |
-
-### Session Management
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/session` | Start new game session |
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/session` | Create a game session |
 | `GET` | `/api/session/{id}` | Get session details |
 | `PATCH` | `/api/session/{id}/end` | End a session |
-| `GET` | `/api/session/player/{id}` | List player's sessions |
+| `GET` | `/api/session/player/{userId}` | List a player's sessions |
 
-### Instructor Dashboard
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/instructor/overview` | Class-wide summary |
-| `GET` | `/api/instructor/bottlenecks` | Cognitive bottleneck analysis |
-| `GET` | `/api/instructor/students` | Student list sorted by risk |
-| `GET` | `/api/instructor/interventions` | Recent intervention log |
-| `GET` | `/api/instructor/mastery-heatmap` | Mastery data across skills |
+### Players and puzzles
 
-### Puzzles
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/puzzle/level/{level}` | Get puzzles for dungeon level |
-| `GET` | `/api/puzzle/{id}` | Get specific puzzle |
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/player/{userId}` | Get a player profile and progress |
+| `GET` | `/api/player/{userId}/gamestate` | Read saved game state |
+| `PUT` | `/api/player/{userId}/gamestate` | Save game state |
+| `POST` | `/api/player/{userId}/reset` | Reset player progress |
+| `GET` | `/api/player/{userId}/history` | Get player interaction history |
+| `GET` | `/api/puzzle/level/{level}` | Get puzzles for a level |
+| `GET` | `/api/puzzle/{id}` | Get a puzzle |
 
----
+### Instructor views
 
-## Project Structure
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/instructor/overview` | Class overview |
+| `GET` | `/api/instructor/bottlenecks` | Learning bottleneck summary |
+| `GET` | `/api/instructor/students` | Student overview |
+| `GET` | `/api/instructor/interventions` | Recent intervention records |
+| `GET` | `/api/instructor/mastery-heatmap` | Mastery summary |
 
-```
-ODIN.Api/
-├── Controllers/
-│   ├── SubmissionController.cs      # Submission Orchestrator (main pipeline)
-│   ├── PlayerController.cs          # Player registration, login, profiles
-│   ├── SessionController.cs         # Game session management
-│   ├── InstructorController.cs      # Instructor Dashboard endpoints
-│   └── PuzzleController.cs          # Puzzle/level management
-├── Data/
-│   └── OdinDbContext.cs             # EF Core context + seed data
-├── Models/
-│   ├── Domain/
-│   │   ├── Player.cs                # Player entity + MasteryState
-│   │   ├── GameSession.cs           # Session tracking
-│   │   ├── CodeSubmission.cs        # Central data payload
-│   │   ├── InteractionLog.cs        # D2 behavioral logs
-│   │   ├── ScaffoldingHint.cs       # Pedagogical hint library
-│   │   └── Puzzle.cs                # Abstract Puzzle + ArrayPuzzle
-│   ├── DTOs/
-│   │   ├── SubmissionRequest.cs     # Client → Server JSON contract
-│   │   └── SubmissionResponse.cs    # Server → Client response
-│   └── Enums/
-│       ├── BehaviorState.cs         # Five HBDA states
-│       ├── DiagnosticCategory.cs    # AST error categories
-│       ├── InterventionType.cs      # Intervention actions
-│       └── SkillType.cs             # Array skill categories
-├── Services/
-│   ├── Interfaces/
-│   │   └── IServices.cs             # All service interfaces + result types
-│   ├── HbdaService.cs               # Stage 1: Behavioral gatekeeper
-│   ├── DiagnosticEngine.cs          # Stage 2: Roslyn AST parser
-│   ├── BktService.cs                # Stage 3: Bayesian Knowledge Tracing
-│   ├── AffectiveStateService.cs     # Helplessness Decision Gate
-│   ├── InterventionController.cs    # Adaptive hint selection
-│   └── EditDistanceCalculator.cs    # Levenshtein distance utility
-├── Program.cs                       # DI wiring + middleware
-├── appsettings.json                 # Configuration
-├── ODIN.Api.http                    # Test request collection
-└── README.md
-```
+For the request collection, see `ODIN.Api.http`. Swagger is enabled only in Development.
 
-## Calibration Notes
+## Configuration reference
 
-The following values are **configurable** and should be calibrated during Phase 1 (Algorithm Benchmarking) with expert psychologists:
+| Setting | Purpose |
+| --- | --- |
+| `ConnectionStrings:SupabaseDb` | PostgreSQL connection string |
+| `Supabase:Url` | Supabase project URL used to validate token issuer |
+| `Supabase:JwtSecret` | JWT signing secret used for bearer-token validation |
+| `Cors:AllowedOrigins`, `Cors:AllowedOriginsCsv`, or `CORS_ALLOWED_ORIGINS` | Allowed browser origins; comma-separated settings are supported |
 
-- **HBDA thresholds** in `HbdaService.cs` (submission interval, edit distance, etc.)
-- **Helplessness Score weights** in `HbdaService.cs` (+20, +15, +10, -10, -15)
-- **Helplessness Decision Gate** threshold in `AffectiveStateService.cs` (currently 50.0)
-- **BKT parameters** in `BktService.cs` (P(L₀), P(T), P(G), P(S))
-- **Mastery threshold** in `BktService.cs` (currently P(L) ≥ 0.90)
-- **Scaffolding hint text** in `OdinDbContext.cs` seed data (to be refined with psychologists)
+## Notes on interpretation
 
-## White Box Test Cases Covered
+Behavior labels and mastery estimates are generated by deterministic rules and statistical models. They describe system observations for instructional support; they are not clinical conclusions. Thresholds and intervention content should be reviewed for the intended study or deployment context.
 
-| ID | Test Case | Implementation |
-|----|-----------|---------------|
-| W-04 | AST: Syntax Validation | `DiagnosticEngine` → Roslyn parser |
-| W-05 | AST: Semantic Analysis (Off-by-One) | `CheckOffByOneErrors()` |
-| W-06 | HBDA: Gaming Detection | `IsGamingTheSystem()` |
-| W-07 | HBDA: Wheel-Spinning | `IsWheelSpinning()` |
-| W-08 | HBDA: Tinkering | `IsTinkering()` |
-| W-09 | HBDA: Productive Failure | `IsProductiveFailure()` |
-| W-10 | HBDA: Active Thinking | `IsActiveThinking()` |
-| W-11 | BKT: Cold Start (Warm-Up) | `BktService.WarmUpAttempts = 3` |
-| W-12 | BKT: Mastery Trigger | `P(L) ≥ 0.90 + 5 consecutive correct` |
+## Related project
 
-## License
-
-This project is part of an academic thesis — Observational Debugging & Intervention Node (ODIN).
+- [ODIN web client](https://github.com/kitarsin/ODIN)
