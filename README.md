@@ -2,14 +2,18 @@
 
 The ODIN Core API is the ASP.NET Core backend for the ODIN intelligent tutoring system. It authenticates requests with Supabase JWTs, evaluates student code, records session and interaction data, tracks mastery, and returns feedback for the web and Godot clients.
 
-ODIN is designed for introductory C# programming tasks, currently centered on arrays and related skills. It uses explicit, rule-based diagnostics and observable behavior signals to select support. It does not diagnose learned helplessness or any other clinical condition.
+## C# learning focus
+
+ODIN's current learning domain is college-level C# arrays. The tasks focus on array problem-solving and common logic misconceptions, especially off-by-one indexing and out-of-bounds access. Collections and object-oriented constructs are possible future expansions, not current supported learning domains.
+
+The API uses rule-based code diagnostics and observable behavior signals to guide support. It does not diagnose learned helplessness or any other clinical condition.
 
 ## Request pipeline
 
 A code submission is processed by the backend services:
 
 1. **Behavior classification** evaluates interaction and submission telemetry.
-2. **Code diagnosis** parses and checks submitted C# code.
+2. **Code diagnosis** parses and checks submitted C# array solutions.
 3. **Mastery tracking** updates the student's skill estimate.
 4. **Affective score tracking** records a research/admin signal.
 5. **Intervention selection** returns puzzle hints, NPC dialogue, rewards, or progression updates.
